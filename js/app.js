@@ -845,9 +845,16 @@ function renderReading() {
     bkBody.appendChild(row);
   } else {
     bkBody.appendChild(el(`<p>📖 <b>${bk.title}</b></p>`));
-    bkBody.appendChild(el(`<p class="muted">🔖 Você parou na página <b>${bk.page || '—'}</b>${S.reading.booksDone > 0 ? ' • ✅ Livro concluído!' : ''}</p>`));
+    bkBody.appendChild(el(`<p class="muted" id="bkPageLabel">🔖 Você parou na página <b>${bk.page || '—'}</b>${S.reading.booksDone > 0 ? ' • ✅ Livro concluído!' : ''}</p>`));
+    const pageRow = el(`<div class="man-row"><input type="number" id="bkPageInput" min="1" placeholder="Nova página (ex: 42)"><button class="btn btn-sm" id="bkPageSave">🔖 Marcar</button></div>`);
+    pageRow.querySelector('#bkPageSave').onclick = () => {
+      const pg = parseInt(pageRow.querySelector('#bkPageInput').value);
+      if (!pg || pg <= 0) { toast('Digite o número da página 😉'); return; }
+      bk.page = pg; save(); toast('Página marcada! 🔖', 'ok'); render();
+    };
+    bkBody.appendChild(pageRow);
     const edit = el(`<button class="btn btn-sm btn-ghost">✏️ Trocar título</button>`);
-    edit.onclick = () => { bk.title = ''; save(); render(); };
+    edit.onclick = () => { bk.title = ''; bk.page = 0; save(); render(); };
     bkBody.appendChild(edit);
   }
   wrap.appendChild(bkCard);
