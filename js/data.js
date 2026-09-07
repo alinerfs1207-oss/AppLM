@@ -313,7 +313,7 @@ const WEEKLY_TASKS = [
 
 const QUICK_DEBITS = [
   { id: 'escola', icon: 'envelope', name: 'Notificação da escola', value: 2.0 },
-  { id: 'desobedecer', icon: 'warn', name: 'Desobedecer os pais', value: 1.0 },
+  { id: 'desobedecer', icon: 'warn', name: 'Desobedecer os pais', value: 2.0 },
   { id: 'biblia', icon: 'bible', name: 'Não levar a Bíblia para a igreja', value: 1.0 },
 ];
 

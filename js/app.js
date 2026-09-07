@@ -670,6 +670,23 @@ function renderTasks() {
 
   wrap.appendChild(el(`<div class="card slim muted">💡 Quando você marca "Feito!", o papai ou a mamãe confere e aprova. Aí o valor entra no seu saldo! Tarefa não feita no dia desconta o mesmo valor.</div>`));
 
+  // Regras de desconto (visível para o Luiz ficar ciente)
+  const deb = el(`<div class="card debit-rules"><h3>${icon('warn', 'ico-sm')} Isso também desconta da mesada</h3><div id="dr"></div></div>`);
+  const dr = deb.querySelector('#dr');
+  QUICK_DEBITS.forEach(t => dr.appendChild(el(`<div class="task">
+    <span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
+    <div class="task-info"><div class="task-name">${t.name}</div><div class="task-val neg-val">− ${money(debitValue(t))}</div></div>
+  </div>`)));
+  dr.appendChild(el(`<div class="task">
+    <span class="task-icon">${icon('bell', 'ico-lg')}</span>
+    <div class="task-info"><div class="task-name">Não fazer o check-in do dia</div><div class="task-val neg-val">− ${money(S.settings.checkinMissDebit)}</div></div>
+  </div>`));
+  dr.appendChild(el(`<div class="task">
+    <span class="task-icon">${icon('brain', 'ico-lg')}</span>
+    <div class="task-info"><div class="task-name">Não fazer o quiz de gramática do dia</div><div class="task-val neg-val">− ${money(S.settings.quizMissDebit)}</div></div>
+  </div>`));
+  wrap.appendChild(deb);
+
   // Extrato simplificado
   const hist = el(`<div class="card"><h3>${icon('coin', 'ico-sm')} Últimas movimentações</h3><div id="hl"></div></div>`);
   const list = S.entries.slice(-8).reverse();

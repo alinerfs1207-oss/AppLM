@@ -82,6 +82,8 @@ hr { border: none; border-top: 1px solid #e2e8f0; margin: 12px 0; }
 .task.done-approved .task-name::after { content: " ✅"; }
 .task.done-pending .task-name::after { content: " ⏳"; }
 .summary-txt { font-style: italic; white-space: pre-wrap; }
+.debit-rules { border: 2px solid #fecaca; background: #fff7f7; }
+.neg-val { color: var(--bad); font-weight: 800; }
 
 /* ---------- Barras ---------- */
 .bar { background: #e2e8f0; border-radius: 999px; height: 14px; overflow: hidden; margin: 8px 0; }
