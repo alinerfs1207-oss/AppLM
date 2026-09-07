@@ -17,6 +17,7 @@ function defaultState() {
       quizMissDebit: 0.5,
       checkinMissDebit: 0.5,
       bookReward: 10.0,
+      gemsBonusMax: 4.0,      // bônus máximo em R$ que as gemas do mês podem valer
       prizeText: '🎁 Prêmio surpresa dos 30 dias!',
       taskValues: {},         // overrides por id
       debitValues: {},        // overrides por id
@@ -27,10 +28,12 @@ function defaultState() {
     weekly: {},               // status por chave taskId@dueDate
     weeklyProcessed: [],
     grammar: {},              // por qid: {seen, wrong, streak, learned}
-    reading: { sessions: [], gameMinutes: 0, booksDone: 0 },
-    gems: 0, gemsTotal: 0,
+    reading: { sessions: [], gameMinutes: 0, booksDone: 0, book: { title: '', page: 0 }, history: [] },
+    gems: 0, gemsTotal: 0,    // gems = do mês (viram bônus); gemsTotal = de sempre (desbloqueia skins)
     avatar: 'lion', theme: 'azul',
     eiAnswers: [],            // {date, qid, opt, quality, tags}
+    eiFocus: [],              // competências a reforçar no mês (definidas no fechamento)
+    months: [],               // meses pagos (arquivo)
     entrySeq: 1,
   };
 }
@@ -48,6 +51,12 @@ function load() {
       if (st.cycle && st.cycle.start === '2025-09-08') {
         st.cycle = { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' };
       }
+      // migração: campos novos em estados antigos
+      if (!st.reading.book) st.reading.book = { title: '', page: 0 };
+      if (!st.reading.history) st.reading.history = [];
+      if (!st.months) st.months = [];
+      if (!st.eiFocus) st.eiFocus = [];
+      if (st.settings.gemsBonusMax == null) st.settings.gemsBonusMax = 4.0;
       return st;
     }
   } catch (e) { /* estado novo */ }
@@ -83,6 +92,31 @@ function addGems(n) { S.gems += n; S.gemsTotal += n; save(); }
 
 function taskValue(t) { return S.settings.taskValues[t.id] ?? t.value; }
 function debitValue(t) { return S.settings.debitValues[t.id] ?? t.value; }
+
+// ---------- Gemas que viram dinheiro ----------
+// O bônus máximo (padrão R$ 4) é dividido pelo total de gemas possíveis no mês:
+// cada gema ganha vale uma fração, paga no fechamento junto com a mesada.
+function weeklyOccurrences() {
+  let n = 0;
+  WEEKLY_TASKS.forEach(t => {
+    let d = S.cycle.start;
+    while (d <= S.cycle.end) { if (strToDate(d).getDay() === t.due) n++; d = addDays(d, 1); }
+  });
+  return n;
+}
+function maxGemsEstimate() {
+  const len = cycleLen();
+  // check-in(2) + tarefas aprovadas(2) + quiz(5 acertos + 5 bônus) + emocional(3) + leitura diária(5) + livro(10)
+  return len * 2 + (3 * len + weeklyOccurrences()) * 2 + len * 10 + len * 3 + len * 5 + 10;
+}
+function gemsBonus() {
+  const max = maxGemsEstimate();
+  if (!max) return 0;
+  return Math.min(S.settings.gemsBonusMax, Math.round(S.settings.gemsBonusMax * S.gems / max * 100) / 100);
+}
+function monthName(dstr) {
+  return ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'][strToDate(dstr).getMonth()];
+}
 
 function dayRec(dstr) {
   if (!S.days[dstr]) S.days[dstr] = { checkin: false, tasks: {}, quiz: null, ei: null };
@@ -178,6 +212,13 @@ function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.fl
 
 // ---------- Inteligência emocional ----------
 function eiToday() {
+  // se o mês anterior apontou competências fracas, as situações delas vêm primeiro
+  if (S.eiFocus && S.eiFocus.length) {
+    const focus = EI_BANK.filter(q => q.tags.some(t => S.eiFocus.includes(t)));
+    const rest = EI_BANK.filter(q => !q.tags.some(t => S.eiFocus.includes(t)));
+    const ordered = [...focus, ...rest];
+    return ordered[S.eiAnswers.length % ordered.length];
+  }
   const idx = Math.max(1, Math.min(dayIndex(todayStr()), EI_BANK.length));
   return EI_BANK[(idx - 1) % EI_BANK.length];
 }
@@ -320,15 +361,18 @@ function renderHome() {
   const chest = el(`<div class="card">
     <h3>${icon('chest', 'ico-sm')} Baú do Grande Prêmio</h3>
     <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-    <p class="muted">${doneDays} de ${len} dias completos (check-in + quiz + coração)</p>
+    <p class="muted">${doneDays} de ${len} dias completos (check-in + quiz + emocional)</p>
     ${day > len ? `<button class="btn btn-big" id="chestBtn">🔓 Abrir o baú!</button>` : `<p class="muted">O baú abre no fim dos ${len} dias... continue firme! 💪</p>`}
   </div>`);
   const cb = chest.querySelector('#chestBtn');
   if (cb) cb.onclick = () => { confetti(); modal(`<div class="center"><div class="big-ico">${icon('gift', 'ico-xl')}</div><h2>Parabéns, Luiz!</h2><p>Você completou ${doneDays} dias!</p><p><b>${S.settings.prizeText}</b></p><p>Peça para o papai ou a mamãe revelar seu prêmio! 🎉</p><button class="btn" onclick="this.closest('.modal-bg').remove()">Fechar</button></div>`); };
   wrap.appendChild(chest);
 
-  // Minutos de videogame
+  // Minutos de videogame + gemas valendo dinheiro
   wrap.appendChild(el(`<div class="card slim">${icon('gamepad', 'ico-sm')} Banco de videogame: <b>${S.reading.gameMinutes} min</b> para jogar no fim de semana</div>`));
+  if (day >= 1 && day <= len && S.gems > 0) {
+    wrap.appendChild(el(`<div class="card slim">${icon('gem', 'ico-sm')} Suas <b>${S.gems} gemas</b> do mês já valem <b>+${money(gemsBonus())}</b> no dia do pagamento — quanto mais gemas, mais dinheiro!</div>`));
+  }
 
   // Avatares / skins
   wrap.appendChild(renderSkins());
@@ -352,7 +396,7 @@ function reminders() {
   const out = [];
   DAILY_TASKS.forEach(t => { if (!rec.tasks[t.id]) out.push(`${icon(t.icon, 'ico-xs')} Luiz, você já cuidou disto hoje: <b>${t.name.toLowerCase()}</b>?`); });
   if (!rec.quiz || !rec.quiz.done) out.push(`${icon('brain', 'ico-xs')} O quiz de gramática de hoje te espera — 5 perguntas e ${money(S.settings.quizReward)} se acertar todas!`);
-  if (!rec.ei) out.push(`${icon('heart', 'ico-xs')} A pergunta do coração de hoje ainda não foi respondida!`);
+  if (!rec.ei) out.push(`${icon('heart', 'ico-xs')} Sua missão emocional de hoje ainda não foi feita!`);
   const wd = strToDate(d).getDay();
   WEEKLY_TASKS.forEach(t => {
     if (t.due === wd) {
@@ -593,22 +637,56 @@ function renderReading() {
     return wrap;
   }
 
+  // Livro do mês
+  const bk = S.reading.book;
+  const bkCard = el(`<div class="card"><h3>${icon('book', 'ico-sm')} Livro de ${monthName(S.cycle.start)}</h3><div id="bkBody"></div></div>`);
+  const bkBody = bkCard.querySelector('#bkBody');
+  if (!bk.title) {
+    bkBody.appendChild(el(`<p class="muted">Qual livro você vai ler este mês?</p>`));
+    const row = el(`<div class="man-row"><input type="text" id="bkTitle" placeholder="Título do livro (ex: O Pequeno Príncipe)"><button class="btn btn-sm" id="bkSave">Salvar</button></div>`);
+    row.querySelector('#bkSave').onclick = () => {
+      const t = row.querySelector('#bkTitle').value.trim();
+      if (!t) { toast('Escreva o título do livro 😉'); return; }
+      bk.title = t; save(); render(); toast('Boa leitura! 📖', 'ok');
+    };
+    bkBody.appendChild(row);
+  } else {
+    bkBody.appendChild(el(`<p>📖 <b>${bk.title}</b></p>`));
+    bkBody.appendChild(el(`<p class="muted">🔖 Você parou na página <b>${bk.page || '—'}</b>${S.reading.booksDone > 0 ? ' • ✅ Livro concluído!' : ''}</p>`));
+    const edit = el(`<button class="btn btn-sm btn-ghost">✏️ Trocar título</button>`);
+    edit.onclick = () => { bk.title = ''; save(); render(); };
+    bkBody.appendChild(edit);
+  }
+  wrap.appendChild(bkCard);
+
   const c = el(`<div class="card center big-card">
     <div class="big-ico">${icon('book', 'ico-xl')}</div>
     <h2>Missão Leitura</h2>
-    <p>Leia <b>1 capítulo ou 30 minutos</b> e escreva um resumo.</p>
-    <p>🎮 Cada leitura aprovada = <b>+30 min de videogame</b> (acumula pro fim de semana!)</p>
+    <p>Leia pelo menos <b>30 minutos SEM parar</b> e escreva um resumo.</p>
+    <p>🎮 Todo o tempo lido vira tempo de videogame: <b>35 min lidos = 35 min de jogo!</b></p>
+    <p class="muted">⚠️ Parou antes dos 30 minutos? O tempo não conta e não acumula.</p>
     <p>📕 Livro inteiro no mês = <b>+${money(S.settings.bookReward)}</b> na mesada!</p>
     <button class="btn btn-big" id="startRead">▶️ Começar a ler agora</button></div>`);
-  c.querySelector('#startRead').onclick = () => { readTimer = { startMs: Date.now() }; render(); };
+  c.querySelector('#startRead').onclick = () => {
+    if (!S.reading.book.title) { toast('Primeiro salve o título do livro do mês! 📖'); return; }
+    readTimer = { startMs: Date.now() }; render();
+  };
   wrap.appendChild(c);
 
-  const sess = el(`<div class="card"><h3>${icon('book', 'ico-sm')} Suas leituras</h3><div id="sl"></div></div>`);
+  const sess = el(`<div class="card"><h3>${icon('clock', 'ico-sm')} Suas leituras</h3><div id="sl"></div></div>`);
   const list = S.reading.sessions.slice(-6).reverse();
   if (!list.length) sess.querySelector('#sl').appendChild(el('<p class="muted">Nenhuma leitura ainda. Que tal começar hoje? 🚀</p>'));
-  list.forEach(s => sess.querySelector('#sl').appendChild(el(`<div class="hist-row"><span>${fmtBR(s.date)} — ${s.minutes} min</span><span>${s.status === 'approved' ? '✅ +30 min 🎮' : s.status === 'pending' ? '⏳ aguardando' : '❌'}</span></div>`)));
+  list.forEach(s => sess.querySelector('#sl').appendChild(el(`<div class="hist-row"><span>${fmtBR(s.date)} — ${s.minutes} min</span><span>${s.status === 'approved' ? `✅ +${s.minutes} min 🎮` : s.status === 'pending' ? '⏳ aguardando' : '❌'}</span></div>`)));
   wrap.appendChild(sess);
-  wrap.appendChild(el(`<div class="card slim muted">📚 Livros completos este mês: <b>${S.reading.booksDone}</b>. Terminou um livro? Avise o papai ou a mamãe para registrar!</div>`));
+
+  // Histórico de livros
+  if (S.reading.history.length) {
+    const h = el(`<div class="card"><h3>📚 Seus livros</h3><div id="bh"></div></div>`);
+    S.reading.history.slice().reverse().forEach(b => h.querySelector('#bh').appendChild(el(
+      `<div class="hist-row"><span>Livro de ${b.label}: <b>${b.title}</b></span><span>${b.finished ? '✅' : '📖'}</span></div>`)));
+    wrap.appendChild(h);
+  }
+  wrap.appendChild(el(`<div class="card slim muted">📕 Terminou o livro? Avise o papai ou a mamãe para registrar e ganhar ${money(S.settings.bookReward)}!</div>`));
   return wrap;
 }
 
@@ -616,13 +694,19 @@ function openSummaryModal(mins) {
   const enough = mins >= 30;
   modal(`
     <h3>📖 Você leu ${mins} minuto${mins === 1 ? '' : 's'}!</h3>
-    ${enough ? '<p>Agora escreva um resumo do que leu (o que aconteceu na história?):</p><textarea id="sumTxt" rows="5" placeholder="Escreva aqui seu resumo com suas palavras..."></textarea><button class="btn btn-big" id="sendSum">📨 Enviar para aprovação</button>'
-      : `<p>Para valer os 30 min de videogame, a leitura precisa ter pelo menos <b>30 minutos</b>. Continue lendo mais um pouco! 💪</p><button class="btn" id="keepRead">📖 Voltar a ler</button><button class="btn btn-ghost" id="cancelRead">Deixar pra depois</button>`}
+    ${enough ? `<p>🎉 Muito bem! <b>Agora faça seu resumo para os ${mins} minutos entrarem no seu tempo de jogo:</b></p>
+      <textarea id="sumTxt" rows="5" placeholder="O que aconteceu na história? Conte com suas palavras..."></textarea>
+      <label>🔖 Em que página você parou? <input type="number" id="sumPage" min="1" placeholder="ex: 42"></label>
+      <button class="btn btn-big" id="sendSum">📨 Enviar para aprovação</button>`
+      : `<p>⏱️ A leitura precisa ter pelo menos <b>30 minutos sem parar</b> para valer tempo de jogo. Se parar agora, esses ${mins} minuto${mins === 1 ? '' : 's'} não contam e não acumulam!</p>
+      <button class="btn" id="keepRead">📖 Voltar a ler</button><button class="btn btn-ghost" id="cancelRead">Desistir (perde o tempo)</button>`}
   `, m => {
     const send = m.querySelector('#sendSum');
     if (send) send.onclick = () => {
       const txt = m.querySelector('#sumTxt').value.trim();
       if (txt.length < 80) { toast('Capricha mais no resumo! Escreva pelo menos umas 3 linhas 😉'); return; }
+      const pg = parseInt(m.querySelector('#sumPage').value);
+      if (pg > 0) { S.reading.book.page = pg; }
       S.reading.sessions.push({ id: Date.now(), date: todayStr(), minutes: mins, summary: txt, status: 'pending' });
       readTimer = null; save(); m.remove(); confetti();
       toast('Resumo enviado! Aguardando aprovação 👍', 'ok'); render();
@@ -638,13 +722,13 @@ function openSummaryModal(mins) {
 function renderEI() {
   const d = todayStr();
   const wrap = el('<div class="screen"></div>');
-  if (!inCycle(d)) { wrap.appendChild(el(`<div class="card center"><p>As perguntas do coração começam em ${fmtBR(S.cycle.start)}! 💛</p></div>`)); return wrap; }
+  if (!inCycle(d)) { wrap.appendChild(el(`<div class="card center"><p>As missões emocionais começam em ${fmtBR(S.cycle.start)}! 💛</p></div>`)); return wrap; }
   const rec = dayRec(d);
   const day = dayIndex(d);
 
   if (rec.ei) {
     wrap.appendChild(el(`<div class="card center big-card"><div class="big-ico">${icon('heart', 'ico-xl')}</div>
-      <h2>Pergunta de hoje respondida!</h2><p>Volte amanhã para uma nova situação.</p></div>`));
+      <h2>Missão emocional de hoje concluída!</h2><p>Volte amanhã para uma nova situação.</p></div>`));
   } else {
     const q = eiToday();
     const c = el(`<div class="card">
@@ -661,10 +745,11 @@ function renderEI() {
         b.classList.add(o.q === 2 ? 'right' : o.q === 1 ? 'mid' : 'wrong');
         rec.ei = { qid: q.id, opt: i, quality: o.q };
         S.eiAnswers.push({ date: d, qid: q.id, opt: i, quality: o.q, tags: q.tags });
-        addGems(3); save();
+        const g = o.q === 2 ? 3 : o.q === 1 ? 2 : 1;
+        addGems(g); save();
         const fb = c.querySelector('#eiFb');
-        if (o.q === 2) fb.innerHTML = `<div class="fb ok">🌟 Escolha incrível! Isso mostra ${q.tags.map(t => EI_LABELS[t].toLowerCase()).join(' e ')} de verdade. +3 💎</div>`;
-        else fb.innerHTML = `<div class="fb ${o.q === 1 ? 'mid' : 'bad'}">${o.q === 1 ? '🤔 Boa tentativa!' : '💭 Vamos pensar juntos...'}<br><small>${o.tip}</small><br>+3 💎 por refletir!</div>`;
+        if (o.q === 2) fb.innerHTML = `<div class="fb ok">🌟 Escolha incrível! Isso mostra ${q.tags.map(t => EI_LABELS[t].toLowerCase()).join(' e ')} de verdade. +${g} 💎</div>`;
+        else fb.innerHTML = `<div class="fb ${o.q === 1 ? 'mid' : 'bad'}">${o.q === 1 ? `🤔 Boa tentativa! +${g} 💎` : `💭 Vamos pensar juntos... +${g} 💎`}<br><small>${o.tip}</small></div>`;
         fb.appendChild(el('<button class="btn" style="margin-top:8px" onclick="render()">Continuar</button>'));
         renderHeader();
       };
@@ -673,25 +758,29 @@ function renderEI() {
     wrap.appendChild(c);
   }
 
-  // Mapa do coração (versão amigável)
-  const agg = eiMap();
-  const answered = S.eiAnswers.length;
-  if (answered) {
-    const c = el(`<div class="card"><h3>${icon('map', 'ico-sm')} Mapa do seu coração</h3><div id="map"></div></div>`);
-    Object.entries(agg).forEach(([k, v]) => {
-      if (!v.n) return;
-      const pct = Math.round(v.sum / (v.n * 2) * 100);
-      c.querySelector('#map').appendChild(el(`<div class="cat-row">
-        <div class="cat-name">${icon(eiIcon(k), 'ico-xs')} ${EI_LABELS[k]}</div>
-        <div class="bar sm"><div class="bar-fill" style="width:${pct}%"></div></div>
-        <span class="cat-pct">${pct}%</span></div>`));
-    });
-    wrap.appendChild(c);
-  }
+  // Mapa emocional (versão amigável)
+  if (S.eiAnswers.length) wrap.appendChild(eiMapCard('Seu mapa emocional'));
 
   // Balanço do mês (fim do ciclo)
-  if (day >= cycleLen() && answered >= 5) wrap.appendChild(eiMonthlyCard(false));
+  if (day >= cycleLen() && S.eiAnswers.length >= 5) wrap.appendChild(eiMonthlyCard(false));
   return wrap;
+}
+
+function eiMapCard(title) {
+  const agg = eiMap();
+  const c = el(`<div class="card"><h3>${icon('map', 'ico-sm')} ${title}</h3><div class="mapb"></div></div>`);
+  let any = false;
+  Object.entries(agg).forEach(([k, v]) => {
+    if (!v.n) return;
+    any = true;
+    const pct = Math.round(v.sum / (v.n * 2) * 100);
+    c.querySelector('.mapb').appendChild(el(`<div class="cat-row">
+      <div class="cat-name">${icon(eiIcon(k), 'ico-xs')} ${EI_LABELS[k]}</div>
+      <div class="bar sm"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <span class="cat-pct">${pct}%</span></div>`));
+  });
+  if (!any) c.querySelector('.mapb').appendChild(el('<p class="muted">Ainda sem respostas neste mês.</p>'));
+  return c;
 }
 
 function eiIcon(k) {
@@ -711,11 +800,13 @@ function eiMonthlyCard(parentView) {
     responsabilidade: 'Assumir primeiro, explicar depois: contar a verdade logo, mesmo com medo da bronca.',
     autoconfianca: 'Trocar "eu sou ruim nisso" por "eu ainda estou aprendendo isso".',
   };
-  const c = el(`<div class="card"><h3>${parentView ? '💛 Balanço emocional do mês' : '🏅 Seu balanço do mês'}</h3><div id="bal"></div></div>`);
+  const c = el(`<div class="card"><h3>${parentView ? '💛 Perfil emocional do mês' : '🏅 Seu balanço do mês'}</h3><div id="bal"></div></div>`);
   const bal = c.querySelector('#bal');
+  if (parentView && best.length) bal.appendChild(el(`<p><b>Perfil identificado:</b> o Luiz demonstra mais facilidade em <b>${best.map(r => EI_LABELS[r.k].toLowerCase()).join(' e ')}</b>${worst.length ? ` e precisa de apoio em <b>${worst.map(r => EI_LABELS[r.k].toLowerCase()).join(' e ')}</b>` : ''}.</p>`));
   if (best.length) bal.appendChild(el(`<p>🌟 <b>Pontos fortes:</b> ${best.map(r => EI_LABELS[r.k] + ` (${r.pct}%)`).join(', ')}. ${parentView ? 'Vale elogiar isso nele!' : 'Você mandou muito bem nisso, continue assim!'}</p>`));
-  worst.forEach(r => bal.appendChild(el(`<p>🌱 <b>Para crescer — ${EI_LABELS[r.k]} (${r.pct}%):</b> ${tips[r.k]}</p>`)));
+  worst.forEach(r => bal.appendChild(el(`<p>🌱 <b>Para trabalhar — ${EI_LABELS[r.k]} (${r.pct}%):</b> ${tips[r.k]}</p>`)));
   if (!worst.length) bal.appendChild(el('<p>💪 Nenhum ponto fraco forte este mês — resultado excelente!</p>'));
+  if (parentView) bal.appendChild(el(`<p class="muted">Ao fechar o mês (botão "Pago"), as perguntas do mês seguinte passam a priorizar automaticamente as competências mais fracas.${S.eiFocus && S.eiFocus.length ? ` Foco atual: ${S.eiFocus.map(k => EI_LABELS[k]).join(' e ')}.` : ''}</p>`));
   return c;
 }
 
@@ -734,17 +825,85 @@ function askPin() {
   });
 }
 
+function grammarFocusCard() {
+  const per = {};
+  GRAMMAR_BANK.forEach(q => {
+    const s = S.grammar[q.id];
+    if (s && s.wrong > 0) per[q.cat] = (per[q.cat] || 0) + s.wrong;
+  });
+  const top = Object.entries(per).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const c = el(`<div class="card"><h3>🔁 Reforço de gramática</h3><div id="gf"></div></div>`);
+  const gf = c.querySelector('#gf');
+  if (!top.length) gf.appendChild(el('<p class="muted">Nenhum erro registrado ainda — quando o Luiz errar, as categorias com mais dificuldade aparecem aqui.</p>'));
+  else {
+    gf.appendChild(el(`<p>Onde ele mais erra: ${top.map(([cat, n]) => `<b>${cat}</b> (${n} erro${n > 1 ? 's' : ''})`).join(', ')}.</p>`));
+    gf.appendChild(el('<p class="muted">O app já repete automaticamente essas questões nos próximos dias, priorizando-as até ele acertar 2 vezes seguidas. O progresso de aprendizado NÃO zera na virada do mês.</p>'));
+  }
+  return c;
+}
+
+function openPaymentModal(payout, bal, gb) {
+  modal(`<h3>💰 Fechar o mês</h3>
+    <p>Confirmando, o app registra o pagamento e começa o novo ciclo <b>hoje</b>, com as datas atualizadas automaticamente.</p>
+    <div class="hist-row"><span>Saldo das tarefas</span><b>${money(bal)}</b></div>
+    <div class="hist-row"><span>Bônus de gemas (${S.gems} 💎)</span><b>+${money(gb)}</b></div>
+    <div class="hist-row"><span><b>Pagar ao Luiz</b> (teto ${money(S.settings.limit)})</span><b class="pos">${money(payout)}</b></div>
+    <p class="muted">O que zera: saldo, gemas do mês, tarefas, respostas emocionais e leituras do mês.<br>
+    O que continua: minutos de videogame, avatares/temas desbloqueados e o aprendizado de gramática.</p>
+    <button class="btn btn-big ok-btn" id="payOk">✅ Confirmar pagamento de ${money(payout)}</button>
+    <button class="btn btn-big btn-ghost" id="payNo">Cancelar</button>`, m => {
+    m.querySelector('#payNo').onclick = () => m.remove();
+    m.querySelector('#payOk').onclick = () => { m.remove(); doPayment(payout); };
+  });
+}
+
+function doPayment(payout) {
+  // arquivo do mês
+  const agg = eiMap();
+  const eiSnap = {};
+  Object.entries(agg).forEach(([k, v]) => { if (v.n) eiSnap[k] = Math.round(v.sum / (v.n * 2) * 100); });
+  if (S.reading.book.title) {
+    S.reading.history.push({ label: monthName(S.cycle.start), year: strToDate(S.cycle.start).getFullYear(), title: S.reading.book.title, finished: S.reading.booksDone > 0 });
+  }
+  // foco emocional do próximo mês = 2 competências mais fracas (abaixo de 75%)
+  const rows = Object.entries(agg).filter(([, v]) => v.n > 0)
+    .map(([k, v]) => ({ k, pct: v.sum / (v.n * 2) })).sort((a, b) => a.pct - b.pct);
+  S.eiFocus = rows.filter(r => r.pct < 0.75).slice(0, 2).map(r => r.k);
+  S.months.push({
+    start: S.cycle.start, end: S.cycle.end, paidOn: todayStr(),
+    saldo: Math.round(balance() * 100) / 100, gems: S.gems, gemsBonus: gemsBonus(),
+    payout, books: S.reading.booksDone, ei: eiSnap,
+  });
+  // zera o mês (mantém: aprendizado de gramática, minutos de jogo, desbloqueios)
+  S.entries = []; S.gems = 0; S.days = {}; S.weekly = {};
+  S.processed = []; S.weeklyProcessed = [];
+  S.reading.sessions = []; S.reading.booksDone = 0; S.reading.book = { title: '', page: 0 };
+  S.eiAnswers = [];
+  // novo ciclo de 30 dias a partir de hoje
+  const t = todayStr();
+  S.cycle = { start: t, end: addDays(t, 30), payday: addDays(t, 31) };
+  save();
+  confetti();
+  toast(`Mês fechado! Pago ${money(payout)}. Novo ciclo até ${fmtBR(S.cycle.end)} 🚀`, 'ok');
+  render();
+}
+
 function renderParent() {
   const wrap = el('<div class="screen"></div>');
   const bal = balance();
-  const payout = Math.max(0, Math.min(S.settings.limit, bal));
+  const gb = gemsBonus();
+  const payout = Math.max(0, Math.min(S.settings.limit, bal + gb));
 
-  wrap.appendChild(el(`<div class="card"><h3>👨‍👩‍👦 Painel dos pais</h3>
+  const top = el(`<div class="card"><h3>👨‍👩‍👦 Painel dos pais</h3>
     <div class="pstat-row">
       <div class="pstat"><div class="pstat-v">${money(bal)}</div><div class="pstat-l">Saldo atual</div></div>
+      <div class="pstat"><div class="pstat-v">+${money(gb)}</div><div class="pstat-l">Bônus de gemas (${S.gems} 💎 no mês)</div></div>
       <div class="pstat"><div class="pstat-v">${money(payout)}</div><div class="pstat-l">Pagamento em ${fmtBR(S.cycle.payday)} (teto ${money(S.settings.limit)})</div></div>
-      <div class="pstat"><div class="pstat-v">${S.reading.gameMinutes} min</div><div class="pstat-l">Videogame acumulado</div></div>
-    </div></div>`));
+    </div>
+    <p class="muted" style="margin-top:8px">🎮 Videogame acumulado: <b>${S.reading.gameMinutes} min</b> • 📕 Livros no mês: <b>${S.reading.booksDone}</b></p>
+    <button class="btn btn-big ok-btn" id="payBtn">💰 Pago! Fechar o mês e começar o próximo</button></div>`);
+  top.querySelector('#payBtn').onclick = () => openPaymentModal(payout, bal, gb);
+  wrap.appendChild(top);
 
   // Pendências
   const pend = el(`<div class="card"><h3>⏳ Aguardando aprovação</h3><div id="pl"></div></div>`);
@@ -792,7 +951,7 @@ function renderParent() {
       <div class="task-info"><div class="task-name">Leitura de ${s.minutes} min (${fmtBR(s.date)})</div>
       <div class="task-val summary-txt">"${s.summary}"</div></div>
       <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
-    row.querySelector('.ok-btn').onclick = () => { s.status = 'approved'; S.reading.gameMinutes += 30; addGems(5); save(); render(); toast('+30 min de videogame para o Luiz! 🎮'); };
+    row.querySelector('.ok-btn').onclick = () => { s.status = 'approved'; S.reading.gameMinutes += s.minutes; addGems(5); save(); render(); toast(`+${s.minutes} min de videogame para o Luiz! 🎮`); };
     row.querySelector('.no-btn').onclick = () => { s.status = 'rejected'; save(); render(); };
     pl.appendChild(row);
   });
@@ -843,8 +1002,18 @@ function renderParent() {
   wrap.appendChild(man);
 
   // Relatórios
+  wrap.appendChild(eiMapCard('Mapa emocional do Luiz'));
   wrap.appendChild(eiMonthlyCard(true));
+  wrap.appendChild(grammarFocusCard());
   wrap.appendChild(quizProgressCard());
+
+  // Meses pagos
+  if (S.months.length) {
+    const mh = el(`<div class="card"><h3>📆 Meses fechados</h3><div id="mh"></div></div>`);
+    S.months.slice().reverse().forEach(m => mh.querySelector('#mh').appendChild(el(
+      `<div class="hist-row"><span>${monthName(m.start)} (${fmtBR(m.start)}–${fmtBR(m.end)})</span><b class="pos">pago ${money(m.payout)}</b></div>`)));
+    wrap.appendChild(mh);
+  }
 
   // Histórico completo com reversão
   const hist = el(`<div class="card"><h3>🧾 Histórico completo</h3><div id="fh"></div></div>`);
@@ -868,6 +1037,7 @@ function renderParent() {
     <label>Desconto quiz não feito (R$): <input type="number" step="0.5" id="cfgQuizMiss" value="${S.settings.quizMissDebit}"></label>
     <label>Desconto check-in não feito (R$): <input type="number" step="0.5" id="cfgCheckMiss" value="${S.settings.checkinMissDebit}"></label>
     <label>Prêmio por livro completo (R$): <input type="number" step="0.5" id="cfgBook" value="${S.settings.bookReward}"></label>
+    <label>Bônus máximo das gemas no mês (R$): <input type="number" step="0.5" id="cfgGems" value="${S.settings.gemsBonusMax}"></label>
     <label>Texto do prêmio final: <input type="text" id="cfgPrize" value="${S.settings.prizeText.replace(/"/g, '&quot;')}"></label>
     <label>Novo PIN: <input type="text" id="cfgPin" placeholder="deixe vazio p/ manter"></label>
     <button class="btn btn-big" id="cfgSave">💾 Salvar configurações</button>
@@ -883,6 +1053,7 @@ function renderParent() {
     S.settings.quizMissDebit = parseFloat(cfg.querySelector('#cfgQuizMiss').value) || 0;
     S.settings.checkinMissDebit = parseFloat(cfg.querySelector('#cfgCheckMiss').value) || 0;
     S.settings.bookReward = parseFloat(cfg.querySelector('#cfgBook').value) || 10;
+    S.settings.gemsBonusMax = parseFloat(cfg.querySelector('#cfgGems').value) || 0;
     S.settings.prizeText = cfg.querySelector('#cfgPrize').value || S.settings.prizeText;
     const np = cfg.querySelector('#cfgPin').value.trim();
     if (np) S.pin = np;

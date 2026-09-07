@@ -63,6 +63,109 @@ const ICONS = {
   crown: '<svg viewBox="0 0 64 64"><path d="M8 18l12 10 12-16 12 16 12-10-4 30H12z" fill="#ffc800" stroke="#33334d" stroke-width="3" stroke-linejoin="round"/><rect x="10" y="48" width="44" height="8" rx="3" fill="#e6a700" stroke="#33334d" stroke-width="3"/><circle cx="32" cy="38" r="4" fill="#ff5a5f" stroke="#33334d" stroke-width="2.5"/><circle cx="20" cy="40" r="3" fill="#1cb0f6" stroke="#33334d" stroke-width="2.5"/><circle cx="44" cy="40" r="3" fill="#58cc02" stroke="#33334d" stroke-width="2.5"/></svg>',
 };
 
+// ---------- Avatares em PIXEL ART (estilo gamer 8-bit) ----------
+// px(linhas, paleta): cada caractere vira um "pixel"; '.' é transparente
+function px(rows, pal) {
+  const size = 64 / rows.length;
+  let r = '';
+  rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (pal[ch]) r += `<rect x="${(x * size).toFixed(2)}" y="${(y * size).toFixed(2)}" width="${size + 0.05}" height="${size + 0.05}" fill="${pal[ch]}"/>`;
+    });
+  });
+  return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges">${r}</svg>`;
+}
+
+ICONS.lion = px([
+  '.MMMMMMMMMM.',
+  'MMMMMMMMMMMM',
+  'MMFFFFFFFFMM',
+  'MFFFFFFFFFFM',
+  'MFEEFFFFEEFM',
+  'MFFFFFFFFFFM',
+  'MFFWWWWWWFFM',
+  'MFWWWNNWWWFM',
+  'MFWWWWWWWWFM',
+  'MMFWWWWWWFMM',
+  'MMMFFFFFFMMM',
+  '.MMMMMMMMMM.',
+], { M: '#b45309', F: '#f59e0b', E: '#1f2937', N: '#7c2d12', W: '#fde68a' });
+
+ICONS.wolf = px([
+  'DD........DD',
+  'DDD......DDD',
+  'DGGGGGGGGGGD',
+  'GGGGGGGGGGGG',
+  'GGEEGGGGEEGG',
+  'GGGGGGGGGGGG',
+  'GGGWWWWWWGGG',
+  'GGWWWNNWWWGG',
+  '.GGWWWWWWGG.',
+  '..GGWWWWGG..',
+  '...GGGGGG...',
+  '............',
+], { D: '#475569', G: '#94a3b8', W: '#e2e8f0', E: '#0f172a', N: '#0f172a' });
+
+ICONS.eagle = px([
+  '....WWWW....',
+  '..WWWWWWWW..',
+  '.WWWWWWWWWW.',
+  'WWWWWWWWWWWW',
+  'WWEEWWWWEEWW',
+  'WWWWYYYYWWWW',
+  '.WWWYYYYWWW.',
+  '.WWWWYYWWWW.',
+  '..BBBBBBBB..',
+  '.BBBBBBBBBB.',
+  'BBBBBBBBBBBB',
+  'BBBBBBBBBBBB',
+], { W: '#f1f5f9', B: '#92400e', Y: '#f59e0b', E: '#0f172a' });
+
+ICONS.tiger = px([
+  'OO..OOOO..OO',
+  'OOOOOOOOOOOO',
+  'OSOOOSSOOOSO',
+  'OOOOOOOOOOOO',
+  'OOEEOOOOEEOO',
+  'OOOOOOOOOOOO',
+  'SOOWWWWWWOOS',
+  'OOWWWNNWWWOO',
+  'OOWWWWWWWWOO',
+  '.OOWWWWWWOO.',
+  '..OOOOOOOO..',
+  '............',
+], { O: '#ea580c', S: '#1c1917', W: '#fef3c7', E: '#1c1917', N: '#7c2d12' });
+
+ICONS.dragon = px([
+  '.H........H.',
+  'HHH......HHH',
+  '.HGGGGGGGGH.',
+  '.GGGGGGGGGG.',
+  'GGEEGGGGEEGG',
+  'GGGGGGGGGGGG',
+  'GGLLLLLLLLGG',
+  'GGLLNLLNLLGG',
+  'GGLLLLLLLLGG',
+  '.GGLLLLLLGG.',
+  '..GGGGGGGG..',
+  '............',
+], { G: '#16a34a', L: '#4ade80', H: '#facc15', E: '#dc2626', N: '#065f46' });
+
+ICONS.crown = px([
+  '............',
+  '.C...CC...C.',
+  '.C..CCCC..C.',
+  '.CC.CCCC.CC.',
+  '.CCCCCCCCCC.',
+  '.CCCCCCCCCC.',
+  '.CCRCCBCCGC.',
+  '.CCCCCCCCCC.',
+  '.DDDDDDDDDD.',
+  '.DDDDDDDDDD.',
+  '............',
+  '............',
+], { C: '#facc15', D: '#ca8a04', R: '#ef4444', B: '#3b82f6', G: '#22c55e' });
+
 // Retorna o HTML de um ícone. cls: '' | 'ico-sm' | 'ico-lg' | 'ico-xl'
 function icon(name, cls) {
   return `<span class="ico ${cls || ''}">${ICONS[name] || ''}</span>`;
