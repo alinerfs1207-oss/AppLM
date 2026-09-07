@@ -10,7 +10,7 @@ function defaultState() {
   return {
     v: 1,
     pin: '201214',
-    cycle: { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' },
+    cycle: { start: todayStr(), end: addDays(todayStr(), 30), payday: addDays(todayStr(), 31) },
     settings: {
       limit: 100,
       quizReward: 0.5,        // recompensa por quiz perfeito (5/5) — mês perfeito fecha em R$ 96 (teto 100)
@@ -52,6 +52,12 @@ function normalizeState(st) {
   // migração: ciclo salvo com ano errado (2025) → ciclo correto de 2026
   if (st.cycle && st.cycle.start === '2025-09-08') {
     st.cycle = { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' };
+  }
+  // migração: ciclo ainda não começou e nada foi feito → adianta para começar hoje
+  if (st.cycle && st.entries.length === 0 && Object.keys(st.days).length === 0 && todayStr() < st.cycle.start) {
+    const lenDays = Math.round((strToDate(st.cycle.end) - strToDate(st.cycle.start)) / 86400000);
+    const t = todayStr();
+    st.cycle = { start: t, end: addDays(t, lenDays), payday: addDays(t, lenDays + 1) };
   }
   // migração: campos novos em estados antigos
   if (!st.reading.book) st.reading.book = { title: '', page: 0 };
