@@ -37,6 +37,18 @@ O progresso fica salvo **no navegador do celular** (localStorage). Ou seja:
 - Na área dos pais há **Exportar backup** — façam isso de vez em quando
 - Limpar os dados do navegador apaga o progresso (por isso o backup!)
 
+## ☁️ Sincronização entre celulares (opcional)
+
+Sem configurar nada, os dados vivem no celular que usa o site. Para o pai, a mãe e o Luiz usarem **cada um o seu celular** com os mesmos dados:
+
+1. Acesse [console.firebase.google.com](https://console.firebase.google.com) e crie um projeto gratuito (ex: `missao-luiz`)
+2. No menu **Criação → Realtime Database → Criar banco de dados**, escolha o modo de **teste**
+3. Copie a URL do banco (algo como `https://missao-luiz-default-rtdb.firebaseio.com`)
+4. Adicione um segredo no final para proteger, ex: `https://missao-luiz-default-rtdb.firebaseio.com/familia-Xk29mQ`
+5. Cole essa URL em **Área dos pais → Configurações → Sincronização** em TODOS os celulares
+
+Pronto: aprovações, saldo e progresso aparecem em todos os aparelhos (atualiza sozinho a cada minuto). ⚠️ O modo de teste do Firebase expira em 30 dias — depois, em **Regras**, troque para `".read": true, ".write": true` (o segredo na URL é a proteção).
+
 ## Personalização
 
 Valores das tarefas, recompensa do quiz, descontos, prêmio final, teto e PIN são todos editáveis na área dos pais (⚙️ Configurações). Os bancos de perguntas ficam em `js/data.js`:

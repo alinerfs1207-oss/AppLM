@@ -192,6 +192,23 @@ h3 .ico { margin-right: 4px; }
 .modal h3 { margin-bottom: 8px; }
 .modal input { margin: 8px 0; }
 
+/* ---------- Contrato, desafio e relatório ---------- */
+.contract-card { border: 3px dashed var(--accent); }
+.contract-list { list-style: none; padding: 6px 0; }
+.contract-list li { padding: 3px 0; font-size: .92rem; }
+.challenge-card { background: linear-gradient(135deg, #fdf4ff, #f3e8ff); border: 2px solid #a855f7; }
+.evo-chart { width: 100%; height: auto; display: block; touch-action: none; }
+.evo-caption { margin-top: 4px; }
+.report-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 90; overflow-y: auto; padding: 20px 16px; }
+.report-inner { max-width: 560px; margin: 0 auto; background: var(--card); border-radius: var(--radius); padding: 20px; }
+.report-inner h1 { font-size: 1.2rem; margin-bottom: 4px; }
+@media print {
+  body > *:not(.report-overlay) { display: none !important; }
+  .report-overlay { position: static; padding: 0; background: #fff; }
+  .report-inner { box-shadow: none; }
+  .no-print { display: none !important; }
+}
+
 .confetti {
   position: fixed; top: -12px; width: 10px; height: 14px; z-index: 70;
   border-radius: 3px; pointer-events: none;

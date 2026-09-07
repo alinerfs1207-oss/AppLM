@@ -18,6 +18,8 @@ function defaultState() {
       checkinMissDebit: 0.5,
       bookReward: 10.0,
       gemsBonusMax: 4.0,      // bônus máximo em R$ que as gemas do mês podem valer
+      challengeValue: 1.0,    // valor do desafio surpresa da semana
+      syncUrl: '',            // URL do Firebase Realtime Database (sincronização opcional)
       prizeText: '🎁 Prêmio surpresa dos 30 dias!',
       taskValues: {},         // overrides por id
       debitValues: {},        // overrides por id
@@ -34,35 +36,92 @@ function defaultState() {
     eiAnswers: [],            // {date, qid, opt, quality, tags}
     eiFocus: [],              // competências a reforçar no mês (definidas no fechamento)
     months: [],               // meses pagos (arquivo)
+    challenges: {},           // desafios surpresa por semana: c@N → pending/approved
+    contracts: {},            // contrato do mês aceito, por data de início do ciclo
+    streakBonusDays: [],      // dias em que o bônus de sequência já foi pago
     entrySeq: 1,
+    updatedAt: 0,
   };
+}
+
+function normalizeState(st) {
+  st = Object.assign(defaultState(), st);
+  // migração: avatares antigos salvos como emoji → ids de ícone
+  const emap = { '🦁': 'lion', '🐺': 'wolf', '🦅': 'eagle', '🐯': 'tiger', '🐉': 'dragon', '👑': 'crown' };
+  if (emap[st.avatar]) st.avatar = emap[st.avatar];
+  // migração: ciclo salvo com ano errado (2025) → ciclo correto de 2026
+  if (st.cycle && st.cycle.start === '2025-09-08') {
+    st.cycle = { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' };
+  }
+  // migração: campos novos em estados antigos
+  if (!st.reading.book) st.reading.book = { title: '', page: 0 };
+  if (!st.reading.history) st.reading.history = [];
+  if (!st.months) st.months = [];
+  if (!st.eiFocus) st.eiFocus = [];
+  if (!st.challenges) st.challenges = {};
+  if (!st.contracts) st.contracts = {};
+  if (!st.streakBonusDays) st.streakBonusDays = [];
+  if (st.settings.gemsBonusMax == null) st.settings.gemsBonusMax = 4.0;
+  if (st.settings.challengeValue == null) st.settings.challengeValue = 1.0;
+  if (st.settings.syncUrl == null) st.settings.syncUrl = '';
+  return st;
 }
 
 let S = load();
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
-      const st = Object.assign(defaultState(), JSON.parse(raw));
-      // migração: avatares antigos salvos como emoji → ids de ícone
-      const emap = { '🦁': 'lion', '🐺': 'wolf', '🦅': 'eagle', '🐯': 'tiger', '🐉': 'dragon', '👑': 'crown' };
-      if (emap[st.avatar]) st.avatar = emap[st.avatar];
-      // migração: ciclo salvo com ano errado (2025) → ciclo correto de 2026
-      if (st.cycle && st.cycle.start === '2025-09-08') {
-        st.cycle = { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' };
-      }
-      // migração: campos novos em estados antigos
-      if (!st.reading.book) st.reading.book = { title: '', page: 0 };
-      if (!st.reading.history) st.reading.history = [];
-      if (!st.months) st.months = [];
-      if (!st.eiFocus) st.eiFocus = [];
-      if (st.settings.gemsBonusMax == null) st.settings.gemsBonusMax = 4.0;
-      return st;
-    }
+    if (raw) return normalizeState(JSON.parse(raw));
   } catch (e) { /* estado novo */ }
   return defaultState();
 }
-function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {} }
+function save() {
+  S.updatedAt = Date.now();
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+  scheduleCloudPush();
+}
+
+// ---------- Sincronização opcional entre celulares (Firebase Realtime DB) ----------
+// Os pais criam um projeto gratuito no Firebase, ativam o Realtime Database e
+// colam a URL nas configurações. Todos os celulares com a mesma URL compartilham
+// os dados (última gravação vence).
+let cloudPushTimer = null;
+let cloudStatus = ''; // '', 'ok', 'err'
+function cloudUrl() {
+  const u = (S.settings.syncUrl || '').trim().replace(/\/+$/, '');
+  return u.startsWith('http') ? u + '/applm.json' : null;
+}
+function scheduleCloudPush() {
+  if (!cloudUrl()) return;
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(cloudPush, 1500);
+}
+async function cloudPush() {
+  const u = cloudUrl();
+  if (!u) return;
+  try {
+    const r = await fetch(u, { method: 'PUT', body: JSON.stringify(S) });
+    cloudStatus = r.ok ? 'ok' : 'err';
+  } catch (e) { cloudStatus = 'err'; }
+}
+async function cloudPull() {
+  const u = cloudUrl();
+  if (!u) return;
+  try {
+    const r = await fetch(u);
+    if (!r.ok) { cloudStatus = 'err'; return; }
+    const remote = await r.json();
+    cloudStatus = 'ok';
+    if (remote && remote.updatedAt && remote.updatedAt > (S.updatedAt || 0)) {
+      const keepUrl = S.settings.syncUrl;
+      S = normalizeState(remote);
+      S.settings.syncUrl = keepUrl;
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+      processPastDays();
+      render();
+    }
+  } catch (e) { cloudStatus = 'err'; }
+}
 
 // ---------- Datas ----------
 function todayStr() { return dateToStr(new Date()); }
@@ -84,8 +143,8 @@ function inCycle(dstr) { return dstr >= S.cycle.start && dstr <= S.cycle.end; }
 // ---------- Dinheiro / gemas ----------
 function money(v) { return 'R$ ' + v.toFixed(2).replace('.', ','); }
 function balance() { return S.entries.reduce((a, e) => a + e.amount, 0); }
-function addEntry(desc, amount, cat, auto) {
-  S.entries.push({ id: S.entrySeq++, date: todayStr(), desc, amount: Math.round(amount * 100) / 100, cat, auto: !!auto });
+function addEntry(desc, amount, cat, auto, dateStr) {
+  S.entries.push({ id: S.entrySeq++, date: dateStr || todayStr(), desc, amount: Math.round(amount * 100) / 100, cat, auto: !!auto });
   save();
 }
 function addGems(n) { S.gems += n; S.gemsTotal += n; save(); }
@@ -146,11 +205,11 @@ function processPastDays() {
       DAILY_TASKS.forEach(t => {
         const st = rec.tasks[t.id];
         if (st === 'approved' || st === 'pending') return; // pendente fica p/ pais decidirem
-        if (st === 'rejected') { rec.tasks[t.id] = 'rejected_debited'; addEntry(`❌ ${t.name} (não feita ${fmtBR(d)})`, -taskValue(t), 'tarefa', true); return; }
-        if (!st) { rec.tasks[t.id] = 'missed'; addEntry(`❌ ${t.name} (não feita ${fmtBR(d)})`, -taskValue(t), 'tarefa', true); }
+        if (st === 'rejected') { rec.tasks[t.id] = 'rejected_debited'; addEntry(`❌ ${t.name} (não feita ${fmtBR(d)})`, -taskValue(t), 'tarefa', true, d); return; }
+        if (!st) { rec.tasks[t.id] = 'missed'; addEntry(`❌ ${t.name} (não feita ${fmtBR(d)})`, -taskValue(t), 'tarefa', true, d); }
       });
-      if (!rec.checkin) addEntry(`❌ Check-in não feito (${fmtBR(d)})`, -S.settings.checkinMissDebit, 'checkin', true);
-      if (!rec.quiz || !rec.quiz.done) addEntry(`❌ Quiz de gramática não feito (${fmtBR(d)})`, -S.settings.quizMissDebit, 'quiz', true);
+      if (!rec.checkin) addEntry(`❌ Check-in não feito (${fmtBR(d)})`, -S.settings.checkinMissDebit, 'checkin', true, d);
+      if (!rec.quiz || !rec.quiz.done) addEntry(`❌ Quiz de gramática não feito (${fmtBR(d)})`, -S.settings.quizMissDebit, 'quiz', true, d);
       S.processed.push(d);
     }
     d = addDays(d, 1);
@@ -165,7 +224,7 @@ function processPastDays() {
           const st = S.weekly[key];
           if (st === 'approved' || st === 'pending') { /* ok ou aguardando pais */ }
           else {
-            addEntry(`❌ ${t.name} (semana de ${fmtBR(dd)})`, -taskValue(t), 'tarefa', true);
+            addEntry(`❌ ${t.name} (semana de ${fmtBR(dd)})`, -taskValue(t), 'tarefa', true, dd);
             S.weekly[key] = 'missed';
           }
           if (st !== 'pending') S.weeklyProcessed.push(key);
@@ -188,6 +247,41 @@ function streak() {
   if (!fullDay(d)) d = addDays(d, -1); // hoje ainda em andamento não quebra
   while (d >= S.cycle.start && fullDay(d)) { n++; d = addDays(d, -1); }
   return n;
+}
+
+// Bônus de sequência: a cada 7 dias completos seguidos, +10 gemas
+function maybeStreakBonus() {
+  const d = todayStr();
+  if (!inCycle(d) || !fullDay(d) || S.streakBonusDays.includes(d)) return;
+  const s = streak();
+  if (s > 0 && s % 7 === 0) {
+    S.streakBonusDays.push(d);
+    addGems(10);
+    save(); confetti();
+    toast(`🔥 ${s} dias seguidos! Bônus de sequência: +10 💎`, 'ok');
+  }
+}
+
+// ---------- Desafio surpresa da semana ----------
+// Uma tarefa bônus por semana do ciclo, escolhida de forma "aleatória mas fixa"
+// (mesma semana = mesmo desafio em qualquer celular). Só soma, nunca desconta.
+function challengeOfWeek(wk) {
+  const seed = Math.abs((strToDate(S.cycle.start).getTime() / 86400000 | 0) + wk * 7919);
+  return {
+    key: 'c@' + wk,
+    text: CHALLENGES[(seed * 31 + 17) % CHALLENGES.length],
+    appearDay: wk * 7 + 1 + ((seed * 13 + 5) % 7), // dia do ciclo em que aparece
+    weekEnd: wk * 7 + 7,
+  };
+}
+function activeChallenge() {
+  const day = dayIndex(todayStr());
+  if (day < 1 || day > cycleLen()) return null;
+  const wk = Math.floor((day - 1) / 7);
+  const ch = challengeOfWeek(wk);
+  if (day < ch.appearDay || day > ch.weekEnd) return null;
+  if (S.challenges[ch.key] === 'approved') return null;
+  return ch;
 }
 
 // ---------- Quiz de gramática (adaptativo) ----------
@@ -329,6 +423,27 @@ function renderHome() {
     return wrap;
   }
 
+  // Contrato do mês
+  if (day >= 1 && day <= len && !S.contracts[S.cycle.start]) {
+    const ct = el(`<div class="card contract-card">
+      <h3>🤝 Contrato do mês de ${monthName(S.cycle.start)}</h3>
+      <p>Eu, <b>Luiz Miguel</b>, aceito o desafio dos ${len} dias:</p>
+      <ul class="contract-list">
+        <li>✅ Fazer minhas tarefas diárias e semanais</li>
+        <li>🧠 Responder o quiz de gramática todo dia</li>
+        <li>💛 Fazer a missão emocional todo dia</li>
+        <li>📖 Ler 30 minutos e escrever o resumo</li>
+        <li>🙏 Respeitar e obedecer meus pais</li>
+      </ul>
+      <p class="muted">Cumprindo tudo, ganho minha mesada, gemas, tempo de videogame e o baú do grande prêmio!</p>
+      <button class="btn btn-big" id="acceptContract">🤝 Eu aceito o desafio!</button></div>`);
+    ct.querySelector('#acceptContract').onclick = () => {
+      S.contracts[S.cycle.start] = true; addGems(2); save(); confetti();
+      toast('Contrato assinado! +2 💎 Boa sorte, campeão! 🚀', 'ok'); render();
+    };
+    wrap.appendChild(ct);
+  }
+
   // Check-in
   if (day >= 1 && day <= len) {
     if (!rec.checkin) {
@@ -339,12 +454,33 @@ function renderHome() {
       </div>`);
       c.querySelector('#checkinBtn').onclick = () => {
         rec.checkin = true; addGems(2); save(); confetti();
-        toast('Check-in feito! +2 💎', 'ok'); render();
+        toast('Check-in feito! +2 💎', 'ok'); maybeStreakBonus(); render();
       };
       wrap.appendChild(c);
     } else {
       wrap.appendChild(el(`<div class="card slim ok-strip">${icon('check', 'ico-xs')} Check-in de hoje feito! +2 ${icon('gem', 'ico-xs')}</div>`));
     }
+  }
+
+  // Desafio surpresa da semana
+  const ch = activeChallenge();
+  if (ch) {
+    const st = S.challenges[ch.key];
+    const cc = el(`<div class="card challenge-card">
+      <h3>🎲 Desafio surpresa!</h3>
+      <p><b>${ch.text}</b></p>
+      <p class="muted">Vale <b>+${money(S.settings.challengeValue)}</b> e +3 💎 — só até domingo desta semana. Bônus: se não fizer, não desconta nada!</p>
+      ${st === 'pending' ? '<p><b>⏳ Aguardando aprovação dos pais...</b></p>' : '<button class="btn btn-big" id="chBtn">💪 Missão cumprida!</button>'}</div>`);
+    const cb2 = cc.querySelector('#chBtn');
+    if (cb2) cb2.onclick = () => { S.challenges[ch.key] = 'pending'; save(); toast('Enviado para aprovação! 👍'); render(); };
+    wrap.appendChild(cc);
+  }
+
+  // Sequência e bônus dos 7 dias
+  if (day >= 1 && day <= len) {
+    const s = streak();
+    const rem7 = s % 7 === 0 && s > 0 ? 0 : 7 - (s % 7);
+    wrap.appendChild(el(`<div class="card slim">${icon('flame', 'ico-sm')} Sequência: <b>${s} dia${s === 1 ? '' : 's'}</b> ${rem7 === 0 ? '— bônus dos 7 dias garantido! 🔥 +10 💎' : `— faltam <b>${rem7}</b> dia${rem7 === 1 ? '' : 's'} completos para o bônus de +10 💎`}</div>`));
   }
 
   // Lembretes
@@ -374,12 +510,69 @@ function renderHome() {
     wrap.appendChild(el(`<div class="card slim">${icon('gem', 'ico-sm')} Suas <b>${S.gems} gemas</b> do mês já valem <b>+${money(gemsBonus())}</b> no dia do pagamento — quanto mais gemas, mais dinheiro!</div>`));
   }
 
+  // Gráfico de evolução do saldo
+  const chart = balanceChartCard();
+  if (chart) wrap.appendChild(chart);
+
   // Avatares / skins
   wrap.appendChild(renderSkins());
 
   // Curiosidade do dia
   wrap.appendChild(factCard(day));
   return wrap;
+}
+
+// ---------- Gráfico: evolução do saldo dia a dia ----------
+function balanceSeries() {
+  const perDay = {};
+  S.entries.forEach(e => { perDay[e.date] = (perDay[e.date] || 0) + e.amount; });
+  const pts = [];
+  let acc = 0, d = S.cycle.start;
+  const stop = todayStr() < S.cycle.end ? todayStr() : S.cycle.end;
+  while (d <= stop) {
+    acc += perDay[d] || 0;
+    pts.push({ d, v: Math.round(acc * 100) / 100 });
+    d = addDays(d, 1);
+  }
+  return pts;
+}
+
+function balanceChartCard() {
+  const pts = balanceSeries();
+  if (pts.length < 2) return null;
+  const W = 320, H = 120, PL = 8, PR = 40, PT = 12, PB = 20;
+  const vals = pts.map(p => p.v);
+  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  if (hi === lo) hi = lo + 1;
+  const x = i => PL + i * (W - PL - PR) / (pts.length - 1);
+  const y = v => PT + (hi - v) * (H - PT - PB) / (hi - lo);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+  const area = `${line}L${x(pts.length - 1).toFixed(1)},${y(Math.max(lo, 0)).toFixed(1)}L${x(0).toFixed(1)},${y(Math.max(lo, 0)).toFixed(1)}Z`;
+  const last = pts[pts.length - 1];
+  const zeroY = y(0);
+  const c = el(`<div class="card"><h3>📈 Sua evolução</h3>
+    <svg viewBox="0 0 ${W} ${H}" class="evo-chart" role="img" aria-label="Evolução do saldo no mês">
+      <line x1="${PL}" y1="${zeroY.toFixed(1)}" x2="${W - PR}" y2="${zeroY.toFixed(1)}" stroke="#cbd5e1" stroke-width="1"/>
+      <path d="${area}" fill="var(--accent)" opacity="0.12"/>
+      <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(pts.length - 1).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="4" fill="var(--accent)" stroke="#fff" stroke-width="2"/>
+      <text x="${(x(pts.length - 1) + 6).toFixed(1)}" y="${(y(last.v) + 4).toFixed(1)}" font-size="10" font-weight="800" fill="#334155">${money(last.v)}</text>
+      <text x="${PL}" y="${H - 6}" font-size="9" fill="#64748b">${fmtBR(pts[0].d)}</text>
+      <text x="${(W - PR).toFixed(1)}" y="${H - 6}" font-size="9" fill="#64748b" text-anchor="end">${fmtBR(last.d)}</text>
+    </svg>
+    <p class="muted evo-caption" id="evoCap">Toque no gráfico para ver cada dia • hoje: ${money(last.v)}</p></div>`);
+  const svg = c.querySelector('svg');
+  const cap = c.querySelector('#evoCap');
+  const showAt = clientX => {
+    const rect = svg.getBoundingClientRect();
+    const relX = (clientX - rect.left) / rect.width * W;
+    let idx = Math.round((relX - PL) / ((W - PL - PR) / (pts.length - 1)));
+    idx = Math.max(0, Math.min(pts.length - 1, idx));
+    cap.innerHTML = `📅 ${fmtBR(pts[idx].d)} — saldo: <b>${money(pts[idx].v)}</b>`;
+  };
+  svg.addEventListener('pointerdown', e => showAt(e.clientX));
+  svg.addEventListener('pointermove', e => { if (e.buttons || e.pointerType === 'touch') showAt(e.clientX); });
+  return c;
 }
 
 function countFullDays() {
@@ -578,7 +771,7 @@ function finishQuiz() {
   rec.quiz = { done: true, correct };
   if (correct === 5) { addEntry(`🏆 Quiz perfeito (5/5) — ${fmtBR(todayStr())}`, S.settings.quizReward, 'quiz'); addGems(5); confetti(); }
   quizSession = null;
-  save(); render();
+  save(); maybeStreakBonus(); render();
   toast(correct === 5 ? `PERFEITO! +${money(S.settings.quizReward)} e +5 💎!` : `Você acertou ${correct}/5! 💎`, 'ok');
 }
 
@@ -746,7 +939,7 @@ function renderEI() {
         rec.ei = { qid: q.id, opt: i, quality: o.q };
         S.eiAnswers.push({ date: d, qid: q.id, opt: i, quality: o.q, tags: q.tags });
         const g = o.q === 2 ? 3 : o.q === 1 ? 2 : 1;
-        addGems(g); save();
+        addGems(g); save(); maybeStreakBonus();
         const fb = c.querySelector('#eiFb');
         if (o.q === 2) fb.innerHTML = `<div class="fb ok">🌟 Escolha incrível! Isso mostra ${q.tags.map(t => EI_LABELS[t].toLowerCase()).join(' e ')} de verdade. +${g} 💎</div>`;
         else fb.innerHTML = `<div class="fb ${o.q === 1 ? 'mid' : 'bad'}">${o.q === 1 ? `🤔 Boa tentativa! +${g} 💎` : `💭 Vamos pensar juntos... +${g} 💎`}<br><small>${o.tip}</small></div>`;
@@ -842,6 +1035,34 @@ function grammarFocusCard() {
   return c;
 }
 
+// Relatório do mês (tela cheia, pronto para imprimir/guardar)
+function openMonthReport(m) {
+  const ov = el(`<div class="report-overlay"><div class="report-inner">
+    <h1>🦁 Missão Luiz — Relatório de ${monthName(m.start)}</h1>
+    <p class="muted">Período ${fmtBRFull(m.start)} a ${fmtBRFull(m.end)} • pago em ${fmtBRFull(m.paidOn)}</p>
+    <div class="hist-row"><span>Saldo das tarefas</span><b>${money(m.saldo)}</b></div>
+    <div class="hist-row"><span>Gemas do mês</span><b>${m.gems} 💎 (+${money(m.gemsBonus)})</b></div>
+    <div class="hist-row"><span>Livros completos</span><b>${m.books}</b></div>
+    <div class="hist-row"><span><b>Mesada paga</b></span><b class="pos">${money(m.payout)}</b></div>
+    <h3 style="margin-top:16px">💛 Mapa emocional</h3>
+    <div id="repEi"></div>
+    <p class="muted" style="margin-top:16px">Guarde este relatório como registro do crescimento do Luiz! 🌱</p>
+    <div class="no-print" style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn" id="repPrint">🖨️ Imprimir / salvar PDF</button>
+      <button class="btn btn-ghost" id="repClose">Fechar</button>
+    </div></div></div>`);
+  const rep = ov.querySelector('#repEi');
+  const entries = Object.entries(m.ei || {});
+  if (!entries.length) rep.appendChild(el('<p class="muted">Sem respostas emocionais neste mês.</p>'));
+  entries.forEach(([k, pct]) => rep.appendChild(el(`<div class="cat-row">
+    <div class="cat-name">${icon(eiIcon(k), 'ico-xs')} ${EI_LABELS[k]}</div>
+    <div class="bar sm"><div class="bar-fill" style="width:${pct}%"></div></div>
+    <span class="cat-pct">${pct}%</span></div>`)));
+  ov.querySelector('#repPrint').onclick = () => window.print();
+  ov.querySelector('#repClose').onclick = () => ov.remove();
+  document.body.appendChild(ov);
+}
+
 function openPaymentModal(payout, bal, gb) {
   modal(`<h3>💰 Fechar o mês</h3>
     <p>Confirmando, o app registra o pagamento e começa o novo ciclo <b>hoje</b>, com as datas atualizadas automaticamente.</p>
@@ -878,7 +1099,7 @@ function doPayment(payout) {
   S.entries = []; S.gems = 0; S.days = {}; S.weekly = {};
   S.processed = []; S.weeklyProcessed = [];
   S.reading.sessions = []; S.reading.booksDone = 0; S.reading.book = { title: '', page: 0 };
-  S.eiAnswers = [];
+  S.eiAnswers = []; S.challenges = {}; S.streakBonusDays = [];
   // novo ciclo de 30 dias a partir de hoje
   const t = todayStr();
   S.cycle = { start: t, end: addDays(t, 30), payday: addDays(t, 31) };
@@ -917,9 +1138,9 @@ function renderParent() {
         const row = el(`<div class="task"><span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
           <div class="task-info"><div class="task-name">${t.name}</div><div class="task-val">${fmtBR(dstr)} • ${money(taskValue(t))}</div></div>
           <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
-        row.querySelector('.ok-btn').onclick = () => { rec.tasks[t.id] = 'approved'; addEntry(`✅ ${t.name} (${fmtBR(dstr)})`, taskValue(t), 'tarefa'); addGems(2); render(); };
+        row.querySelector('.ok-btn').onclick = () => { rec.tasks[t.id] = 'approved'; addEntry(`✅ ${t.name} (${fmtBR(dstr)})`, taskValue(t), 'tarefa', false, dstr); addGems(2); render(); };
         row.querySelector('.no-btn').onclick = () => {
-          if (S.processed.includes(dstr) || dstr < todayStr()) { rec.tasks[t.id] = 'rejected_debited'; addEntry(`❌ ${t.name} (não aprovada ${fmtBR(dstr)})`, -taskValue(t), 'tarefa'); }
+          if (S.processed.includes(dstr) || dstr < todayStr()) { rec.tasks[t.id] = 'rejected_debited'; addEntry(`❌ ${t.name} (não aprovada ${fmtBR(dstr)})`, -taskValue(t), 'tarefa', false, dstr); }
           else rec.tasks[t.id] = 'rejected';
           save(); render();
         };
@@ -936,10 +1157,10 @@ function renderParent() {
     const row = el(`<div class="task"><span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
       <div class="task-info"><div class="task-name">${t.name}</div><div class="task-val">semana até ${fmtBR(due)} • ${money(taskValue(t))}</div></div>
       <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
-    row.querySelector('.ok-btn').onclick = () => { S.weekly[key] = 'approved'; if (!S.weeklyProcessed.includes(key)) S.weeklyProcessed.push(key); addEntry(`✅ ${t.name} (semana até ${fmtBR(due)})`, taskValue(t), 'tarefa'); addGems(2); render(); };
+    row.querySelector('.ok-btn').onclick = () => { S.weekly[key] = 'approved'; if (!S.weeklyProcessed.includes(key)) S.weeklyProcessed.push(key); addEntry(`✅ ${t.name} (semana até ${fmtBR(due)})`, taskValue(t), 'tarefa', false, due); addGems(2); render(); };
     row.querySelector('.no-btn').onclick = () => {
       S.weekly[key] = 'missed'; if (!S.weeklyProcessed.includes(key)) S.weeklyProcessed.push(key);
-      addEntry(`❌ ${t.name} (não aprovada, semana até ${fmtBR(due)})`, -taskValue(t), 'tarefa'); render();
+      addEntry(`❌ ${t.name} (não aprovada, semana até ${fmtBR(due)})`, -taskValue(t), 'tarefa', false, due); render();
     };
     pl.appendChild(row);
   });
@@ -953,6 +1174,20 @@ function renderParent() {
       <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
     row.querySelector('.ok-btn').onclick = () => { s.status = 'approved'; S.reading.gameMinutes += s.minutes; addGems(5); save(); render(); toast(`+${s.minutes} min de videogame para o Luiz! 🎮`); };
     row.querySelector('.no-btn').onclick = () => { s.status = 'rejected'; save(); render(); };
+    pl.appendChild(row);
+  });
+  // desafios surpresa
+  Object.entries(S.challenges).forEach(([key, st]) => {
+    if (st !== 'pending') return;
+    hasPend = true;
+    const wk = parseInt(key.split('@')[1]);
+    const ch = challengeOfWeek(wk);
+    const row = el(`<div class="task"><span class="task-icon">🎲</span>
+      <div class="task-info"><div class="task-name">Desafio surpresa: ${ch.text}</div>
+      <div class="task-val">semana ${wk + 1} • +${money(S.settings.challengeValue)} e +3 💎</div></div>
+      <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
+    row.querySelector('.ok-btn').onclick = () => { S.challenges[key] = 'approved'; addEntry(`🎲 Desafio surpresa: ${ch.text}`, S.settings.challengeValue, 'desafio'); addGems(3); render(); };
+    row.querySelector('.no-btn').onclick = () => { delete S.challenges[key]; save(); render(); };
     pl.appendChild(row);
   });
   if (!hasPend) pl.appendChild(el('<p class="muted">Nenhuma pendência no momento 🎉</p>'));
@@ -1007,11 +1242,15 @@ function renderParent() {
   wrap.appendChild(grammarFocusCard());
   wrap.appendChild(quizProgressCard());
 
-  // Meses pagos
+  // Meses pagos (com relatório imprimível)
   if (S.months.length) {
     const mh = el(`<div class="card"><h3>📆 Meses fechados</h3><div id="mh"></div></div>`);
-    S.months.slice().reverse().forEach(m => mh.querySelector('#mh').appendChild(el(
-      `<div class="hist-row"><span>${monthName(m.start)} (${fmtBR(m.start)}–${fmtBR(m.end)})</span><b class="pos">pago ${money(m.payout)}</b></div>`)));
+    S.months.slice().reverse().forEach(m => {
+      const row = el(`<div class="hist-row"><span>${monthName(m.start)} (${fmtBR(m.start)}–${fmtBR(m.end)})</span>
+        <span><b class="pos">pago ${money(m.payout)}</b> <button class="btn btn-sm btn-ghost">📄 Relatório</button></span></div>`);
+      row.querySelector('button').onclick = () => openMonthReport(m);
+      mh.querySelector('#mh').appendChild(row);
+    });
     wrap.appendChild(mh);
   }
 
@@ -1038,6 +1277,9 @@ function renderParent() {
     <label>Desconto check-in não feito (R$): <input type="number" step="0.5" id="cfgCheckMiss" value="${S.settings.checkinMissDebit}"></label>
     <label>Prêmio por livro completo (R$): <input type="number" step="0.5" id="cfgBook" value="${S.settings.bookReward}"></label>
     <label>Bônus máximo das gemas no mês (R$): <input type="number" step="0.5" id="cfgGems" value="${S.settings.gemsBonusMax}"></label>
+    <label>Valor do desafio surpresa (R$): <input type="number" step="0.5" id="cfgChallenge" value="${S.settings.challengeValue}"></label>
+    <label>Sincronização entre celulares — URL do Firebase (opcional): <input type="text" id="cfgSync" value="${(S.settings.syncUrl || '').replace(/"/g, '&quot;')}" placeholder="https://seu-projeto.firebaseio.com/familia-XYZ">
+    <small class="muted">Todos os celulares com a mesma URL compartilham os dados. Veja o passo a passo no README do projeto. ${S.settings.syncUrl ? (cloudStatus === 'ok' ? '☁️ Conectado' : cloudStatus === 'err' ? '⚠️ Erro de conexão' : '☁️ Aguardando...') : ''}</small></label>
     <label>Texto do prêmio final: <input type="text" id="cfgPrize" value="${S.settings.prizeText.replace(/"/g, '&quot;')}"></label>
     <label>Novo PIN: <input type="text" id="cfgPin" placeholder="deixe vazio p/ manter"></label>
     <button class="btn btn-big" id="cfgSave">💾 Salvar configurações</button>
@@ -1054,6 +1296,8 @@ function renderParent() {
     S.settings.checkinMissDebit = parseFloat(cfg.querySelector('#cfgCheckMiss').value) || 0;
     S.settings.bookReward = parseFloat(cfg.querySelector('#cfgBook').value) || 10;
     S.settings.gemsBonusMax = parseFloat(cfg.querySelector('#cfgGems').value) || 0;
+    S.settings.challengeValue = parseFloat(cfg.querySelector('#cfgChallenge').value) || 1;
+    S.settings.syncUrl = cfg.querySelector('#cfgSync').value.trim();
     S.settings.prizeText = cfg.querySelector('#cfgPrize').value || S.settings.prizeText;
     const np = cfg.querySelector('#cfgPin').value.trim();
     if (np) S.pin = np;
@@ -1086,4 +1330,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-icon]').forEach(s => { s.innerHTML = ICONS[s.dataset.icon] || ''; });
   document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => { currentTab = b.dataset.tab; parentMode = false; render(); });
   render();
+  // sincronização em nuvem (se configurada): puxa agora e a cada 60s
+  cloudPull();
+  setInterval(cloudPull, 60000);
 });

@@ -317,6 +317,22 @@ const QUICK_DEBITS = [
   { id: 'biblia', icon: 'bible', name: 'Não levar a Bíblia para a igreja', value: 1.0 },
 ];
 
+// ---------- DESAFIOS SURPRESA (1 por semana, dia aleatório, só bônus) ----------
+const CHALLENGES = [
+  '🚗 Ajude a lavar ou limpar o carro',
+  '🛒 Ajude a guardar as compras do mercado',
+  '📖 Leia 10 minutos em voz alta para alguém da família',
+  '🍽️ Arrume a mesa do jantar sem ninguém pedir',
+  '🧼 Ajude a lavar a louça de uma refeição',
+  '🎁 Separe 3 brinquedos ou roupas em bom estado para doar',
+  '💬 Faça um elogio sincero para cada pessoa da casa',
+  '🧹 Ajude a varrer a casa',
+  '📚 Organize a estante ou os livros do quarto',
+  '☕ Ajude um adulto a preparar o café da manhã',
+  '✉️ Escreva um bilhete de agradecimento para alguém da família',
+  '🌱 Ajude a cuidar das plantas ou do quintal',
+];
+
 const AVATARS = [
   { id: 'lion', name: 'Leão Corajoso', gems: 0 },
   { id: 'wolf', name: 'Lobo Esperto', gems: 50 },
