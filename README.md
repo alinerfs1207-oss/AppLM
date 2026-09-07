@@ -29,6 +29,19 @@ As gemas do mês valem dinheiro: o bônus máximo (padrão R$ 4) é dividido pel
 3. O site fica em `https://SEU-USUARIO.github.io/AppLM/`
 4. No celular, abra o site e use **"Adicionar à tela inicial"** — vira um app 📱
 
+### Domínio próprio (LM.alinefrancalz.com.br)
+
+O repositório já tem o arquivo `CNAME` configurado para `LM.alinefrancalz.com.br`. Para ativar:
+
+1. No registrador do domínio (Registro.br, se for `.com.br`), crie um registro **CNAME**:
+   - Nome/Host: `LM`
+   - Valor/Destino: `SEU-USUARIO.github.io` (sem `https://`, sem barra no final)
+2. No GitHub: **Settings → Pages**, campo "Custom domain", confirme `LM.alinefrancalz.com.br` e clique em **Save**
+3. Aguarde a propagação do DNS (de minutos a algumas horas) e depois marque **Enforce HTTPS**
+4. O site passa a abrir em `https://LM.alinefrancalz.com.br`
+
+Esse subdomínio é independente do domínio principal — quem acessa `alinefrancalz.com.br` não chega automaticamente aqui, e vice-versa. Não é uma senha: é só um endereço que não aparece linkado em nenhum outro lugar.
+
 ## ⚠️ Importante sobre os dados
 
 O progresso fica salvo **no navegador do celular** (localStorage). Ou seja:
