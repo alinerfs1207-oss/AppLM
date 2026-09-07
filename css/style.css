@@ -138,6 +138,23 @@ label { display: block; font-size: .85rem; font-weight: 700; margin-bottom: 10px
 label input { margin-top: 4px; }
 textarea { resize: vertical; margin: 8px 0; }
 
+/* ---------- Ícones SVG ---------- */
+.ico { display: inline-flex; vertical-align: -0.22em; }
+.ico svg { width: 1.25em; height: 1.25em; }
+.ico-xs svg { width: 1.1em; height: 1.1em; }
+.ico-sm svg { width: 22px; height: 22px; }
+.ico-lg svg { width: 36px; height: 36px; }
+.ico-xl svg { width: 76px; height: 76px; }
+h3 .ico { margin-right: 4px; }
+.big-ico { margin-bottom: 8px; }
+.stat .ico { vertical-align: -0.28em; }
+.hdr-avatar .ico svg { width: 36px; height: 36px; }
+.task-icon { display: grid; place-items: center; }
+.skin-ico { display: block; height: 40px; display: grid; place-items: center; }
+.theme-dot { width: 30px; height: 30px; border-radius: 50%; display: inline-block; border: 3px solid #33334d; }
+.ni svg { width: 27px; height: 27px; }
+.reminder .ico { vertical-align: -0.3em; }
+
 /* ---------- Nav ---------- */
 #nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;

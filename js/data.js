@@ -298,32 +298,32 @@ const FACTS = [
 
 // ---------- CONFIG PADRÃO DE TAREFAS ----------
 const DAILY_TASKS = [
-  { id: 'dentes', icon: '🦷', name: 'Escovar os dentes após as refeições (sem ninguém pedir!)', value: 0.5 },
-  { id: 'cama', icon: '🛏️', name: 'Arrumar a cama e o quarto', value: 0.5 },
-  { id: 'licao', icon: '📝', name: 'Fazer a lição de casa', value: 0.5 },
+  { id: 'dentes', icon: 'tooth', name: 'Escovar os dentes após as refeições (sem ninguém pedir!)', value: 0.5 },
+  { id: 'cama', icon: 'bed', name: 'Arrumar a cama e o quarto', value: 0.5 },
+  { id: 'licao', icon: 'pencil', name: 'Fazer a lição de casa', value: 0.5 },
 ];
 
 const WEEKLY_TASKS = [
-  { id: 'lixo', icon: '🗑️', name: 'Tirar o lixo de todos os lixos', value: 1.5, due: 5, dueLabel: 'sexta-feira' },
-  { id: 'banheiro', icon: '🚽', name: 'Manter o banheiro limpo', value: 1.5, due: 6, dueLabel: 'sábado' },
-  { id: 'unhas', icon: '💅', name: 'Unhas curtas (mãos e pés)', value: 1.0, due: 0, dueLabel: 'domingo' },
-  { id: 'higiene', icon: '👂', name: 'Umbigo e orelhas limpos', value: 1.0, due: 0, dueLabel: 'domingo' },
-  { id: 'escada', icon: '👟', name: 'Escada vazia e sapatos arrumados', value: 1.0, due: 0, dueLabel: 'domingo' },
+  { id: 'lixo', icon: 'trash', name: 'Tirar o lixo de todos os lixos', value: 1.5, due: 5, dueLabel: 'sexta-feira' },
+  { id: 'banheiro', icon: 'spray', name: 'Manter o banheiro limpo', value: 1.5, due: 6, dueLabel: 'sábado' },
+  { id: 'unhas', icon: 'scissors', name: 'Unhas curtas (mãos e pés)', value: 1.0, due: 0, dueLabel: 'domingo' },
+  { id: 'higiene', icon: 'soap', name: 'Umbigo e orelhas limpos', value: 1.0, due: 0, dueLabel: 'domingo' },
+  { id: 'escada', icon: 'shoe', name: 'Escada vazia e sapatos arrumados', value: 1.0, due: 0, dueLabel: 'domingo' },
 ];
 
 const QUICK_DEBITS = [
-  { id: 'escola', icon: '📩', name: 'Notificação da escola', value: 2.0 },
-  { id: 'desobedecer', icon: '🚫', name: 'Desobedecer os pais', value: 1.0 },
-  { id: 'biblia', icon: '📖', name: 'Não levar a Bíblia para a igreja', value: 1.0 },
+  { id: 'escola', icon: 'envelope', name: 'Notificação da escola', value: 2.0 },
+  { id: 'desobedecer', icon: 'warn', name: 'Desobedecer os pais', value: 1.0 },
+  { id: 'biblia', icon: 'bible', name: 'Não levar a Bíblia para a igreja', value: 1.0 },
 ];
 
 const AVATARS = [
-  { emoji: '🦁', name: 'Leão Corajoso', gems: 0 },
-  { emoji: '🐺', name: 'Lobo Esperto', gems: 50 },
-  { emoji: '🦅', name: 'Águia Visionária', gems: 120 },
-  { emoji: '🐯', name: 'Tigre Veloz', gems: 200 },
-  { emoji: '🐉', name: 'Dragão Lendário', gems: 320 },
-  { emoji: '👑', name: 'Rei da Disciplina', gems: 450 },
+  { id: 'lion', name: 'Leão Corajoso', gems: 0 },
+  { id: 'wolf', name: 'Lobo Esperto', gems: 50 },
+  { id: 'eagle', name: 'Águia Visionária', gems: 120 },
+  { id: 'tiger', name: 'Tigre Veloz', gems: 200 },
+  { id: 'dragon', name: 'Dragão Lendário', gems: 320 },
+  { id: 'crown', name: 'Rei da Disciplina', gems: 450 },
 ];
 
 const THEMES = [

@@ -29,7 +29,7 @@ function defaultState() {
     grammar: {},              // por qid: {seen, wrong, streak, learned}
     reading: { sessions: [], gameMinutes: 0, booksDone: 0 },
     gems: 0, gemsTotal: 0,
-    avatar: '🦁', theme: 'azul',
+    avatar: 'lion', theme: 'azul',
     eiAnswers: [],            // {date, qid, opt, quality, tags}
     entrySeq: 1,
   };
@@ -39,7 +39,13 @@ let S = load();
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return Object.assign(defaultState(), JSON.parse(raw));
+    if (raw) {
+      const st = Object.assign(defaultState(), JSON.parse(raw));
+      // migração: avatares antigos salvos como emoji → ids de ícone
+      const emap = { '🦁': 'lion', '🐺': 'wolf', '🦅': 'eagle', '🐯': 'tiger', '🐉': 'dragon', '👑': 'crown' };
+      if (emap[st.avatar]) st.avatar = emap[st.avatar];
+      return st;
+    }
   } catch (e) { /* estado novo */ }
   return defaultState();
 }
@@ -241,7 +247,7 @@ function renderHeader() {
   else dayLabel = `Dia ${day} de ${len}`;
   $('#header').innerHTML = `
     <div class="hdr-left">
-      <span class="hdr-avatar">${S.avatar}</span>
+      <span class="hdr-avatar">${icon(S.avatar)}</span>
       <div>
         <div class="hdr-name">Luiz Miguel</div>
         <div class="hdr-day">${dayLabel}</div>
@@ -249,11 +255,11 @@ function renderHeader() {
     </div>
     <div class="hdr-right">
       <div class="hdr-stats">
-        <span class="stat">💰 ${money(balance())}</span>
-        <span class="stat">💎 ${S.gems}</span>
-        <span class="stat">🔥 ${streak()}</span>
+        <span class="stat">${icon('coin', 'ico-xs')} ${money(balance())}</span>
+        <span class="stat">${icon('gem', 'ico-xs')} ${S.gems}</span>
+        <span class="stat">${icon('flame', 'ico-xs')} ${streak()}</span>
       </div>
-      <button class="lock-btn" id="lockBtn">${parentMode ? '↩️' : '🔒'}</button>
+      <button class="lock-btn" id="lockBtn">${parentMode ? icon('back') : icon('lock')}</button>
     </div>`;
   $('#lockBtn').onclick = () => { if (parentMode) { parentMode = false; render(); } else askPin(); };
 }
@@ -268,7 +274,7 @@ function renderHome() {
 
   if (day < 1) {
     wrap.appendChild(el(`<div class="card big-card center">
-      <div class="big-emoji">🚀</div>
+      <div class="big-ico">${icon('rocket', 'ico-xl')}</div>
       <h2>Prepare-se, Luiz!</h2>
       <p>Sua jornada de <b>${len} dias</b> começa <b>amanhã (${fmtBR(S.cycle.start)})</b>!</p>
       <p>Complete tarefas, ganhe dinheiro 💰, gemas 💎 e desbloqueie o <b>baú do prêmio final</b> 🎁</p>
@@ -283,8 +289,8 @@ function renderHome() {
     if (!rec.checkin) {
       const c = el(`<div class="card checkin-card">
         <h3>👋 Bom dia, Luiz!</h3>
-        <p>Faça seu check-in para começar o dia e proteger sua sequência 🔥</p>
-        <button class="btn btn-big" id="checkinBtn">✅ Fazer check-in do dia</button>
+        <p>Faça seu check-in para começar o dia e proteger sua sequência ${icon('flame', 'ico-xs')}</p>
+        <button class="btn btn-big" id="checkinBtn">${icon('check', 'ico-xs')} Fazer check-in do dia</button>
       </div>`);
       c.querySelector('#checkinBtn').onclick = () => {
         rec.checkin = true; addGems(2); save(); confetti();
@@ -292,14 +298,14 @@ function renderHome() {
       };
       wrap.appendChild(c);
     } else {
-      wrap.appendChild(el(`<div class="card slim ok-strip">✅ Check-in de hoje feito! +2 💎</div>`));
+      wrap.appendChild(el(`<div class="card slim ok-strip">${icon('check', 'ico-xs')} Check-in de hoje feito! +2 ${icon('gem', 'ico-xs')}</div>`));
     }
   }
 
   // Lembretes
   const rem = reminders();
   if (rem.length) {
-    const c = el(`<div class="card"><h3>🔔 Lembretes</h3><div id="remList"></div></div>`);
+    const c = el(`<div class="card"><h3>${icon('bell', 'ico-sm')} Lembretes</h3><div id="remList"></div></div>`);
     rem.forEach(r => c.querySelector('#remList').appendChild(el(`<div class="reminder">${r}</div>`)));
     wrap.appendChild(c);
   }
@@ -308,17 +314,17 @@ function renderHome() {
   const doneDays = countFullDays();
   const pct = Math.min(100, Math.round(doneDays / len * 100));
   const chest = el(`<div class="card">
-    <h3>🎁 Baú do Grande Prêmio</h3>
+    <h3>${icon('chest', 'ico-sm')} Baú do Grande Prêmio</h3>
     <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
     <p class="muted">${doneDays} de ${len} dias completos (check-in + quiz + coração)</p>
     ${day > len ? `<button class="btn btn-big" id="chestBtn">🔓 Abrir o baú!</button>` : `<p class="muted">O baú abre no fim dos ${len} dias... continue firme! 💪</p>`}
   </div>`);
   const cb = chest.querySelector('#chestBtn');
-  if (cb) cb.onclick = () => { confetti(); modal(`<div class="center"><div class="big-emoji">🎁</div><h2>Parabéns, Luiz!</h2><p>Você completou ${doneDays} dias!</p><p><b>${S.settings.prizeText}</b></p><p>Peça para o papai ou a mamãe revelar seu prêmio! 🎉</p><button class="btn" onclick="this.closest('.modal-bg').remove()">Fechar</button></div>`); };
+  if (cb) cb.onclick = () => { confetti(); modal(`<div class="center"><div class="big-ico">${icon('gift', 'ico-xl')}</div><h2>Parabéns, Luiz!</h2><p>Você completou ${doneDays} dias!</p><p><b>${S.settings.prizeText}</b></p><p>Peça para o papai ou a mamãe revelar seu prêmio! 🎉</p><button class="btn" onclick="this.closest('.modal-bg').remove()">Fechar</button></div>`); };
   wrap.appendChild(chest);
 
   // Minutos de videogame
-  wrap.appendChild(el(`<div class="card slim">🎮 Banco de videogame: <b>${S.reading.gameMinutes} min</b> para jogar no fim de semana</div>`));
+  wrap.appendChild(el(`<div class="card slim">${icon('gamepad', 'ico-sm')} Banco de videogame: <b>${S.reading.gameMinutes} min</b> para jogar no fim de semana</div>`));
 
   // Avatares / skins
   wrap.appendChild(renderSkins());
@@ -340,14 +346,14 @@ function reminders() {
   if (!inCycle(d)) return [];
   const rec = dayRec(d);
   const out = [];
-  DAILY_TASKS.forEach(t => { if (!rec.tasks[t.id]) out.push(`${t.icon} Luiz, você já cuidou disto hoje: <b>${t.name.toLowerCase()}</b>?`); });
-  if (!rec.quiz || !rec.quiz.done) out.push(`🧠 O quiz de gramática de hoje te espera — 5 perguntas e ${money(S.settings.quizReward)} se acertar todas!`);
-  if (!rec.ei) out.push(`💛 A pergunta do coração de hoje ainda não foi respondida!`);
+  DAILY_TASKS.forEach(t => { if (!rec.tasks[t.id]) out.push(`${icon(t.icon, 'ico-xs')} Luiz, você já cuidou disto hoje: <b>${t.name.toLowerCase()}</b>?`); });
+  if (!rec.quiz || !rec.quiz.done) out.push(`${icon('brain', 'ico-xs')} O quiz de gramática de hoje te espera — 5 perguntas e ${money(S.settings.quizReward)} se acertar todas!`);
+  if (!rec.ei) out.push(`${icon('heart', 'ico-xs')} A pergunta do coração de hoje ainda não foi respondida!`);
   const wd = strToDate(d).getDay();
   WEEKLY_TASKS.forEach(t => {
     if (t.due === wd) {
       const key = `${t.id}@${d}`;
-      if (!S.weekly[key]) out.push(`${t.icon} Hoje é ${t.dueLabel}! Dia de: <b>${t.name.toLowerCase()}</b> (vale ${money(taskValue(t))})`);
+      if (!S.weekly[key]) out.push(`${icon(t.icon, 'ico-xs')} Hoje é ${t.dueLabel}! Dia de: <b>${t.name.toLowerCase()}</b> (vale ${money(taskValue(t))})`);
     }
   });
   return out.slice(0, 4);
@@ -355,26 +361,26 @@ function reminders() {
 
 function factCard(day) {
   const f = FACTS[(Math.max(1, day) - 1) % FACTS.length];
-  return el(`<div class="card fact-card"><h3>💡 Curiosidade do dia</h3><p>${f}</p></div>`);
+  return el(`<div class="card fact-card"><h3>${icon('bulb', 'ico-sm')} Curiosidade do dia</h3><p>${f}</p></div>`);
 }
 
 function renderSkins() {
-  const c = el(`<div class="card"><h3>🎭 Seus avatares</h3><div class="skin-row" id="skins"></div>
+  const c = el(`<div class="card"><h3>${icon('star', 'ico-sm')} Seus avatares</h3><div class="skin-row" id="skins"></div>
     <h3 style="margin-top:12px">🎨 Temas</h3><div class="skin-row" id="themes"></div></div>`);
   const sk = c.querySelector('#skins');
   AVATARS.forEach(a => {
     const unlocked = S.gemsTotal >= a.gems;
-    const b = el(`<button class="skin ${unlocked ? '' : 'locked'} ${S.avatar === a.emoji ? 'sel' : ''}">
-      <span class="skin-emoji">${unlocked ? a.emoji : '🔒'}</span>
+    const b = el(`<button class="skin ${unlocked ? '' : 'locked'} ${S.avatar === a.id ? 'sel' : ''}">
+      <span class="skin-ico">${unlocked ? icon(a.id, 'ico-lg') : icon('lock', 'ico-lg')}</span>
       <span class="skin-name">${unlocked ? a.name : a.gems + ' 💎'}</span></button>`);
-    b.onclick = () => { if (unlocked) { S.avatar = a.emoji; save(); render(); } else toast(`Junte ${a.gems} 💎 no total para desbloquear!`); };
+    b.onclick = () => { if (unlocked) { S.avatar = a.id; save(); render(); } else toast(`Junte ${a.gems} 💎 no total para desbloquear!`); };
     sk.appendChild(b);
   });
   const th = c.querySelector('#themes');
   THEMES.forEach(t => {
     const unlocked = S.gemsTotal >= t.gems;
     const b = el(`<button class="skin ${unlocked ? '' : 'locked'} ${S.theme === t.id ? 'sel' : ''}">
-      <span class="skin-emoji" style="color:${t.color}">${unlocked ? '⬤' : '🔒'}</span>
+      <span class="skin-ico">${unlocked ? `<span class="theme-dot" style="background:${t.color}"></span>` : icon('lock', 'ico-lg')}</span>
       <span class="skin-name">${unlocked ? t.name : t.gems + ' 💎'}</span></button>`);
     b.onclick = () => { if (unlocked) { S.theme = t.id; save(); render(); } else toast(`Junte ${t.gems} 💎 no total para desbloquear!`); };
     th.appendChild(b);
@@ -389,11 +395,11 @@ function renderTasks() {
   if (!inCycle(d)) { wrap.appendChild(el(`<div class="card center"><p>As tarefas ficam disponíveis durante o ciclo (${fmtBR(S.cycle.start)} a ${fmtBR(S.cycle.end)}) 😉</p></div>`)); return wrap; }
   const rec = dayRec(d);
 
-  const daily = el(`<div class="card"><h3>📅 Tarefas de hoje</h3><div id="dl"></div></div>`);
+  const daily = el(`<div class="card"><h3>${icon('calendar', 'ico-sm')} Tarefas de hoje</h3><div id="dl"></div></div>`);
   DAILY_TASKS.forEach(t => {
     const st = rec.tasks[t.id];
     const row = el(`<div class="task ${st ? 'done-' + st : ''}">
-      <span class="task-icon">${t.icon}</span>
+      <span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
       <div class="task-info"><div class="task-name">${t.name}</div>
       <div class="task-val">+ ${money(taskValue(t))} • ${statusLabel(st)}</div></div>
       ${!st ? '<button class="btn btn-sm">Feito! ✅</button>' : ''}
@@ -404,13 +410,13 @@ function renderTasks() {
   });
   wrap.appendChild(daily);
 
-  const weekly = el(`<div class="card"><h3>🗓️ Tarefas da semana</h3><div id="wl"></div></div>`);
+  const weekly = el(`<div class="card"><h3>${icon('calendar', 'ico-sm')} Tarefas da semana</h3><div id="wl"></div></div>`);
   WEEKLY_TASKS.forEach(t => {
     const due = nextDue(t.id, t.due);
     const key = due ? `${t.id}@${due}` : null;
     const st = key ? S.weekly[key] : null;
     const row = el(`<div class="task ${st ? 'done-' + st : ''}">
-      <span class="task-icon">${t.icon}</span>
+      <span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
       <div class="task-info"><div class="task-name">${t.name}</div>
       <div class="task-val">+ ${money(taskValue(t))} • até ${t.dueLabel}${due ? ' (' + fmtBR(due) + ')' : ''} • ${statusLabel(st)}</div></div>
       ${!st && due ? '<button class="btn btn-sm">Feito! ✅</button>' : ''}
@@ -424,7 +430,7 @@ function renderTasks() {
   wrap.appendChild(el(`<div class="card slim muted">💡 Quando você marca "Feito!", o papai ou a mamãe confere e aprova. Aí o valor entra no seu saldo! Tarefa não feita no dia desconta o mesmo valor.</div>`));
 
   // Extrato simplificado
-  const hist = el(`<div class="card"><h3>🧾 Últimas movimentações</h3><div id="hl"></div></div>`);
+  const hist = el(`<div class="card"><h3>${icon('coin', 'ico-sm')} Últimas movimentações</h3><div id="hl"></div></div>`);
   const list = S.entries.slice(-8).reverse();
   if (!list.length) hist.querySelector('#hl').appendChild(el('<p class="muted">Nada por aqui ainda. Bora começar! 💪</p>'));
   list.forEach(e => hist.querySelector('#hl').appendChild(el(
@@ -448,7 +454,7 @@ function renderQuiz() {
 
   if (rec.quiz && rec.quiz.done && !quizSession) {
     wrap.appendChild(el(`<div class="card center big-card">
-      <div class="big-emoji">${rec.quiz.correct === 5 ? '🏆' : '🧠'}</div>
+      <div class="big-ico">${icon(rec.quiz.correct === 5 ? 'trophy' : 'brain', 'ico-xl')}</div>
       <h2>Quiz de hoje concluído!</h2>
       <p>Você acertou <b>${rec.quiz.correct} de 5</b>.</p>
       ${rec.quiz.correct === 5 ? `<p>PERFEITO! ${money(S.settings.quizReward)} entraram no seu saldo! 💰</p>` : '<p>As que você errou vão voltar nos próximos dias até você dominar! 💪</p>'}
@@ -459,7 +465,7 @@ function renderQuiz() {
 
   if (!quizSession) {
     const c = el(`<div class="card center big-card">
-      <div class="big-emoji">🧠</div>
+      <div class="big-ico">${icon('brain', 'ico-xl')}</div>
       <h2>Quiz de Gramática</h2>
       <p>5 perguntas por dia, estilo Duolingo!</p>
       <p>💎 1 gema por acerto • <b>5/5 = ${money(S.settings.quizReward)} + 5 💎 bônus</b></p>
@@ -537,7 +543,7 @@ function quizProgressCard() {
     if (s && s.learned) cats[q.cat].learned++;
     else if (s && s.wrong > 0) cats[q.cat].reinforce++;
   });
-  const c = el(`<div class="card"><h3>📊 Seu progresso</h3><div id="cp"></div></div>`);
+  const c = el(`<div class="card"><h3>${icon('map', 'ico-sm')} Seu progresso</h3><div id="cp"></div></div>`);
   Object.entries(cats).forEach(([cat, v]) => {
     const pct = Math.round(v.learned / v.total * 100);
     c.querySelector('#cp').appendChild(el(`<div class="cat-row">
@@ -556,13 +562,13 @@ function renderReading() {
   const wrap = el('<div class="screen"></div>');
   const d = todayStr();
 
-  wrap.appendChild(el(`<div class="card slim">🎮 Banco de videogame: <b>${S.reading.gameMinutes} min</b> acumulados</div>`));
+  wrap.appendChild(el(`<div class="card slim">${icon('gamepad', 'ico-sm')} Banco de videogame: <b>${S.reading.gameMinutes} min</b> acumulados</div>`));
 
   if (!inCycle(d)) { wrap.appendChild(el(`<div class="card center"><p>A leitura conta a partir de ${fmtBR(S.cycle.start)}! 📚</p></div>`)); return wrap; }
 
   if (readTimer) {
     const c = el(`<div class="card center big-card">
-      <div class="big-emoji">📖</div>
+      <div class="big-ico">${icon('clock', 'ico-xl')}</div>
       <h2 id="clock">00:00</h2>
       <p>Leitura em andamento... concentre-se na história! 🤫</p>
       <button class="btn btn-big" id="stopRead">✋ Terminei de ler</button></div>`);
@@ -584,7 +590,7 @@ function renderReading() {
   }
 
   const c = el(`<div class="card center big-card">
-    <div class="big-emoji">📚</div>
+    <div class="big-ico">${icon('book', 'ico-xl')}</div>
     <h2>Missão Leitura</h2>
     <p>Leia <b>1 capítulo ou 30 minutos</b> e escreva um resumo.</p>
     <p>🎮 Cada leitura aprovada = <b>+30 min de videogame</b> (acumula pro fim de semana!)</p>
@@ -593,7 +599,7 @@ function renderReading() {
   c.querySelector('#startRead').onclick = () => { readTimer = { startMs: Date.now() }; render(); };
   wrap.appendChild(c);
 
-  const sess = el(`<div class="card"><h3>📖 Suas leituras</h3><div id="sl"></div></div>`);
+  const sess = el(`<div class="card"><h3>${icon('book', 'ico-sm')} Suas leituras</h3><div id="sl"></div></div>`);
   const list = S.reading.sessions.slice(-6).reverse();
   if (!list.length) sess.querySelector('#sl').appendChild(el('<p class="muted">Nenhuma leitura ainda. Que tal começar hoje? 🚀</p>'));
   list.forEach(s => sess.querySelector('#sl').appendChild(el(`<div class="hist-row"><span>${fmtBR(s.date)} — ${s.minutes} min</span><span>${s.status === 'approved' ? '✅ +30 min 🎮' : s.status === 'pending' ? '⏳ aguardando' : '❌'}</span></div>`)));
@@ -633,7 +639,7 @@ function renderEI() {
   const day = dayIndex(d);
 
   if (rec.ei) {
-    wrap.appendChild(el(`<div class="card center big-card"><div class="big-emoji">💛</div>
+    wrap.appendChild(el(`<div class="card center big-card"><div class="big-ico">${icon('heart', 'ico-xl')}</div>
       <h2>Pergunta de hoje respondida!</h2><p>Volte amanhã para uma nova situação.</p></div>`));
   } else {
     const q = eiToday();
@@ -667,12 +673,12 @@ function renderEI() {
   const agg = eiMap();
   const answered = S.eiAnswers.length;
   if (answered) {
-    const c = el(`<div class="card"><h3>🗺️ Mapa do seu coração</h3><div id="map"></div></div>`);
+    const c = el(`<div class="card"><h3>${icon('map', 'ico-sm')} Mapa do seu coração</h3><div id="map"></div></div>`);
     Object.entries(agg).forEach(([k, v]) => {
       if (!v.n) return;
       const pct = Math.round(v.sum / (v.n * 2) * 100);
       c.querySelector('#map').appendChild(el(`<div class="cat-row">
-        <div class="cat-name">${eiIcon(k)} ${EI_LABELS[k]}</div>
+        <div class="cat-name">${icon(eiIcon(k), 'ico-xs')} ${EI_LABELS[k]}</div>
         <div class="bar sm"><div class="bar-fill" style="width:${pct}%"></div></div>
         <span class="cat-pct">${pct}%</span></div>`));
     });
@@ -685,7 +691,7 @@ function renderEI() {
 }
 
 function eiIcon(k) {
-  return { autocontrole: '🧘', empatia: '💗', comunicacao: '🗣️', resiliencia: '🌱', responsabilidade: '🎯', autoconfianca: '⭐' }[k];
+  return { autocontrole: 'shield', empatia: 'heart', comunicacao: 'bubble', resiliencia: 'sprout', responsabilidade: 'target', autoconfianca: 'star' }[k];
 }
 
 function eiMonthlyCard(parentView) {
@@ -745,7 +751,7 @@ function renderParent() {
     DAILY_TASKS.forEach(t => {
       if (rec.tasks[t.id] === 'pending') {
         hasPend = true;
-        const row = el(`<div class="task"><span class="task-icon">${t.icon}</span>
+        const row = el(`<div class="task"><span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
           <div class="task-info"><div class="task-name">${t.name}</div><div class="task-val">${fmtBR(dstr)} • ${money(taskValue(t))}</div></div>
           <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
         row.querySelector('.ok-btn').onclick = () => { rec.tasks[t.id] = 'approved'; addEntry(`✅ ${t.name} (${fmtBR(dstr)})`, taskValue(t), 'tarefa'); addGems(2); render(); };
@@ -764,7 +770,7 @@ function renderParent() {
     hasPend = true;
     const [tid, due] = key.split('@');
     const t = WEEKLY_TASKS.find(x => x.id === tid);
-    const row = el(`<div class="task"><span class="task-icon">${t.icon}</span>
+    const row = el(`<div class="task"><span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
       <div class="task-info"><div class="task-name">${t.name}</div><div class="task-val">semana até ${fmtBR(due)} • ${money(taskValue(t))}</div></div>
       <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
     row.querySelector('.ok-btn').onclick = () => { S.weekly[key] = 'approved'; if (!S.weeklyProcessed.includes(key)) S.weeklyProcessed.push(key); addEntry(`✅ ${t.name} (semana até ${fmtBR(due)})`, taskValue(t), 'tarefa'); addGems(2); render(); };
@@ -778,7 +784,7 @@ function renderParent() {
   S.reading.sessions.forEach(s => {
     if (s.status !== 'pending') return;
     hasPend = true;
-    const row = el(`<div class="task"><span class="task-icon">📖</span>
+    const row = el(`<div class="task"><span class="task-icon">${icon('book', 'ico-lg')}</span>
       <div class="task-info"><div class="task-name">Leitura de ${s.minutes} min (${fmtBR(s.date)})</div>
       <div class="task-val summary-txt">"${s.summary}"</div></div>
       <button class="btn btn-sm ok-btn">✅</button><button class="btn btn-sm no-btn">❌</button></div>`);
@@ -792,10 +798,10 @@ function renderParent() {
   // Descontos rápidos
   const deb = el(`<div class="card"><h3>➖ Descontos rápidos</h3><div id="qd"></div></div>`);
   QUICK_DEBITS.forEach(t => {
-    const row = el(`<div class="task"><span class="task-icon">${t.icon}</span>
+    const row = el(`<div class="task"><span class="task-icon">${icon(t.icon, 'ico-lg')}</span>
       <div class="task-info"><div class="task-name">${t.name}</div><div class="task-val">- ${money(debitValue(t))}</div></div>
       <button class="btn btn-sm no-btn">Descontar</button></div>`);
-    row.querySelector('.no-btn').onclick = () => { addEntry(`${t.icon} ${t.name}`, -debitValue(t), 'desconto'); render(); toast('Desconto aplicado.'); };
+    row.querySelector('.no-btn').onclick = () => { addEntry(`➖ ${t.name}`, -debitValue(t), 'desconto'); render(); toast('Desconto aplicado.'); };
     deb.querySelector('#qd').appendChild(row);
   });
   wrap.appendChild(deb);
@@ -902,6 +908,7 @@ function renderParent() {
 // ---------- Init ----------
 document.addEventListener('DOMContentLoaded', () => {
   processPastDays();
+  document.querySelectorAll('[data-icon]').forEach(s => { s.innerHTML = ICONS[s.dataset.icon] || ''; });
   document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => { currentTab = b.dataset.tab; parentMode = false; render(); });
   render();
 });
