@@ -54,10 +54,15 @@ function normalizeState(st) {
     st.cycle = { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' };
   }
   // migração: ciclo ainda não começou e nada foi feito → adianta para começar hoje
-  if (st.cycle && st.entries.length === 0 && Object.keys(st.days).length === 0 && todayStr() < st.cycle.start) {
+  // (ignora registros de dia vazios, criados só por ter aberto o app antes do ciclo começar)
+  const noRealActivity = st.entries.length === 0 && Object.values(st.days).every(
+    r => !r.checkin && Object.keys(r.tasks || {}).length === 0 && !r.quiz && !r.ei
+  );
+  if (st.cycle && noRealActivity && todayStr() < st.cycle.start) {
     const lenDays = Math.round((strToDate(st.cycle.end) - strToDate(st.cycle.start)) / 86400000);
     const t = todayStr();
     st.cycle = { start: t, end: addDays(t, lenDays), payday: addDays(t, lenDays + 1) };
+    st.days = {};
   }
   // migração: campos novos em estados antigos
   if (!st.reading.book) st.reading.book = { title: '', page: 0 };
@@ -414,7 +419,6 @@ function renderHome() {
   const d = todayStr();
   const day = dayIndex(d);
   const len = cycleLen();
-  const rec = dayRec(d);
   const wrap = el('<div class="screen"></div>');
 
   if (day < 1) {
@@ -428,6 +432,8 @@ function renderHome() {
     wrap.appendChild(factCard(1));
     return wrap;
   }
+
+  const rec = dayRec(d);
 
   // Contrato do mês
   if (day >= 1 && day <= len && !S.contracts[S.cycle.start]) {
