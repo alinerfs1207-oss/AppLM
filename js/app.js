@@ -1333,4 +1333,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // sincronização em nuvem (se configurada): puxa agora e a cada 60s
   cloudPull();
   setInterval(cloudPull, 60000);
+  // vira o dia sozinho: se o relógio do celular passar da meia-noite com o
+  // app aberto, recalcula tarefas/streak/lembretes sem precisar recarregar
+  let lastKnownDate = todayStr();
+  setInterval(() => {
+    const t = todayStr();
+    if (t !== lastKnownDate) {
+      lastKnownDate = t;
+      processPastDays();
+      render();
+    }
+  }, 60000);
 });

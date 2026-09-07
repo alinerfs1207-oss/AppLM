@@ -319,18 +319,20 @@ const QUICK_DEBITS = [
 
 // ---------- DESAFIOS SURPRESA (1 por semana, dia aleatório, só bônus) ----------
 const CHALLENGES = [
-  '🚗 Ajude a lavar ou limpar o carro',
+  '🚗 Tire o lixo de dentro do carro',
+  '🍽️ Guarde a louça da lava-louça',
+  '🧦 Arrume a gaveta de meias',
+  '📖 Leia um livro para a sua irmã',
+  '🧸 Arrume os brinquedos da sala da sua irmã',
   '🛒 Ajude a guardar as compras do mercado',
-  '📖 Leia 10 minutos em voz alta para alguém da família',
   '🍽️ Arrume a mesa do jantar sem ninguém pedir',
-  '🧼 Ajude a lavar a louça de uma refeição',
   '🎁 Separe 3 brinquedos ou roupas em bom estado para doar',
   '💬 Faça um elogio sincero para cada pessoa da casa',
   '🧹 Ajude a varrer a casa',
   '📚 Organize a estante ou os livros do quarto',
   '☕ Ajude um adulto a preparar o café da manhã',
   '✉️ Escreva um bilhete de agradecimento para alguém da família',
-  '🌱 Ajude a cuidar das plantas ou do quintal',
+  '🌱 Ajude a cuidar das plantas de casa',
 ];
 
 const AVATARS = [
