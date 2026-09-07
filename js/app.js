@@ -9,7 +9,7 @@ const STORE_KEY = 'applm_state_v1';
 function defaultState() {
   return {
     v: 1,
-    pin: '1234',
+    pin: '201214',
     cycle: { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' },
     settings: {
       limit: 100,

@@ -11,7 +11,7 @@ Site interativo de tarefas e recompensas para o Luiz Miguel (11 anos), pensado p
 | 🧠 **Quiz** | 5 perguntas de gramática por dia (estilo Duolingo). Questão errada volta nos próximos dias até ele dominar. 5/5 = recompensa em dinheiro |
 | 📚 **Leitura** | Livro do mês com título e página marcada. Leia 30+ min sem parar + resumo aprovado = os minutos lidos viram minutos de videogame (35 lidos = 35 de jogo). Livro inteiro no mês = +R$ 10 |
 | 💛 **Emocional** | 1 situação por dia (escola, amigos, família) com dica imediata; gemas por qualidade da resposta (1/2/3); mapa de competências e perfil mensal; o mês seguinte reforça automaticamente os pontos fracos |
-| 🔒 **Área dos pais** | PIN (padrão: `1234` — troque!). Aprovações, descontos rápidos, ajustes manuais, histórico com estorno, relatórios, teto da mesada, backup e botão **Pago** que fecha o mês, arquiva tudo e inicia o novo ciclo de 30 dias automaticamente |
+| 🔒 **Área dos pais** | PIN de acesso (trocável nas configurações). Aprovações, descontos rápidos, ajustes manuais, histórico com estorno, relatórios, teto da mesada, backup e botão **Pago** que fecha o mês, arquiva tudo e inicia o novo ciclo de 30 dias automaticamente |
 
 As gemas do mês valem dinheiro: o bônus máximo (padrão R$ 4) é dividido pelo total de gemas possíveis no ciclo, e a fração conquistada é paga junto com a mesada — mês perfeito fecha em exatamente R$ 100.
 
