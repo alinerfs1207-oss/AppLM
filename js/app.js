@@ -10,10 +10,10 @@ function defaultState() {
   return {
     v: 1,
     pin: '1234',
-    cycle: { start: '2025-09-08', end: '2025-10-08', payday: '2025-10-09' },
+    cycle: { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' },
     settings: {
       limit: 100,
-      quizReward: 5.0,        // recompensa por quiz perfeito (5/5)
+      quizReward: 0.5,        // recompensa por quiz perfeito (5/5) — mês perfeito fecha em R$ 96 (teto 100)
       quizMissDebit: 0.5,
       checkinMissDebit: 0.5,
       bookReward: 10.0,
@@ -44,6 +44,10 @@ function load() {
       // migração: avatares antigos salvos como emoji → ids de ícone
       const emap = { '🦁': 'lion', '🐺': 'wolf', '🦅': 'eagle', '🐯': 'tiger', '🐉': 'dragon', '👑': 'crown' };
       if (emap[st.avatar]) st.avatar = emap[st.avatar];
+      // migração: ciclo salvo com ano errado (2025) → ciclo correto de 2026
+      if (st.cycle && st.cycle.start === '2025-09-08') {
+        st.cycle = { start: '2026-09-08', end: '2026-10-08', payday: '2026-10-09' };
+      }
       return st;
     }
   } catch (e) { /* estado novo */ }
