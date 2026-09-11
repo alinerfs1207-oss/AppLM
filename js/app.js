@@ -152,7 +152,7 @@ function cloudUrl() {
 function scheduleCloudPush() {
   if (!cloudUrl()) return;
   clearTimeout(cloudPushTimer);
-  cloudPushTimer = setTimeout(cloudPush, 1500);
+  cloudPushTimer = setTimeout(cloudPush, 400);
 }
 async function cloudPush() {
   const u = cloudUrl();
@@ -162,6 +162,17 @@ async function cloudPush() {
     cloudStatus = r.ok ? 'ok' : 'err';
   } catch (e) { cloudStatus = 'err'; }
 }
+// Envia para a nuvem imediatamente, sem esperar o atraso normal — usado quando o
+// app está prestes a fechar, para não perder o que ele acabou de ganhar. `keepalive`
+// pede ao navegador para terminar o envio mesmo depois da página começar a fechar.
+function flushCloudPushNow() {
+  clearTimeout(cloudPushTimer);
+  const u = cloudUrl();
+  if (!u) return;
+  try { fetch(u, { method: 'PUT', body: JSON.stringify(S), keepalive: true }).catch(() => {}); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushCloudPushNow(); });
+window.addEventListener('pagehide', flushCloudPushNow);
 async function cloudPull() {
   const u = cloudUrl();
   if (!u) return;
