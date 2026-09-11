@@ -50,17 +50,18 @@ O progresso fica salvo **no navegador do celular** (localStorage). Ou seja:
 - Na área dos pais há **Exportar backup** — façam isso de vez em quando
 - Limpar os dados do navegador apaga o progresso (por isso o backup!)
 
-## ☁️ Sincronização entre celulares (opcional)
+## ☁️ Sincronização entre celulares
 
-Sem configurar nada, os dados vivem no celular que usa o site. Para o pai, a mãe e o Luiz usarem **cada um o seu celular** com os mesmos dados:
+Já vem configurada de fábrica (`DEFAULT_SYNC_URL` em `js/app.js`), usando um banco Firebase Realtime Database gratuito. Todo celular que abrir o site puxa e envia o progresso para esse mesmo banco automaticamente (a cada ação e a cada 60s) — não precisa configurar nada em cada aparelho. Isso também protege contra o navegador do celular limpar os dados sozinho: o progresso sempre pode ser recuperado da nuvem.
 
-1. Acesse [console.firebase.google.com](https://console.firebase.google.com) e crie um projeto gratuito (ex: `missao-luiz`)
+Para trocar o banco de dados (ex: criar um novo projeto):
+1. Acesse [console.firebase.google.com](https://console.firebase.google.com) e crie um projeto gratuito
 2. No menu **Criação → Realtime Database → Criar banco de dados**, escolha o modo de **teste**
-3. Copie a URL do banco (algo como `https://missao-luiz-default-rtdb.firebaseio.com`)
-4. Adicione um segredo no final para proteger, ex: `https://missao-luiz-default-rtdb.firebaseio.com/familia-Xk29mQ`
-5. Cole essa URL em **Área dos pais → Configurações → Sincronização** em TODOS os celulares
+3. Copie a URL do banco (algo como `https://novo-projeto-default-rtdb.firebaseio.com`)
+4. Adicione um segredo no final para proteger, ex: `https://novo-projeto-default-rtdb.firebaseio.com/familia-Xk29mQ`
+5. Atualize `DEFAULT_SYNC_URL` em `js/app.js` com essa URL (ou cole em **Área dos pais → Configurações → Sincronização** em cada celular, se preferir não mudar o código)
 
-Pronto: aprovações, saldo e progresso aparecem em todos os aparelhos (atualiza sozinho a cada minuto). ⚠️ O modo de teste do Firebase expira em 30 dias — depois, em **Regras**, troque para `".read": true, ".write": true` (o segredo na URL é a proteção).
+⚠️ O modo de teste do Firebase expira em 30 dias — depois disso, em **Regras** no console do Firebase, troque para `{".read": true, ".write": true}` para a sincronização continuar funcionando (o segredo na URL é a proteção, já que o banco fica público para quem souber o endereço exato).
 
 ## Personalização
 

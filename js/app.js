@@ -4,11 +4,15 @@
 // ============================================================
 
 const STORE_KEY = 'applm_state_v1';
+// Banco de dados gratuito (Firebase) para sincronizar entre os celulares da família.
+// O caminho extra depois da URL funciona como um "segredo" — quem não souber o
+// endereço completo não acha o banco de dados.
+const DEFAULT_SYNC_URL = 'https://missao-luiz-default-rtdb.firebaseio.com/familia-luizmiguel-2026';
 
 // ---------- Estado ----------
 function defaultState() {
   return {
-    v: 1,
+    v: 2,
     pin: '201214',
     cycle: { start: todayStr(), end: addDays(todayStr(), 30), payday: addDays(todayStr(), 31) },
     settings: {
@@ -19,7 +23,7 @@ function defaultState() {
       bookReward: 10.0,
       gemsBonusMax: 4.0,      // bônus máximo em R$ que as gemas do mês podem valer
       challengeValue: 1.0,    // valor do desafio surpresa da semana
-      syncUrl: '',            // URL do Firebase Realtime Database (sincronização opcional)
+      syncUrl: DEFAULT_SYNC_URL, // URL do Firebase Realtime Database (sincronização entre celulares)
       prizeText: '🎁 Prêmio surpresa dos 30 dias!',
       taskValues: {},         // overrides por id
       debitValues: {},        // overrides por id
@@ -63,6 +67,15 @@ function normalizeState(st) {
     const t = todayStr();
     st.cycle = { start: t, end: addDays(t, lenDays), payday: addDays(t, lenDays + 1) };
     st.days = {};
+  }
+  // migração única (v2): ativa a sincronização em nuvem e reinicia o ciclo a partir de
+  // hoje — corrige os primeiros dias perdidos pelo bug de armazenamento no celular
+  if (!st.v || st.v < 2) {
+    if (!st.settings.syncUrl) st.settings.syncUrl = DEFAULT_SYNC_URL;
+    const t = todayStr();
+    st.cycle = { start: t, end: addDays(t, 30), payday: addDays(t, 31) };
+    st.days = {};
+    st.v = 2;
   }
   // migração: campos novos em estados antigos
   if (!st.reading.book) st.reading.book = { title: '', page: 0 };
@@ -1314,8 +1327,8 @@ function renderParent() {
     <label>Prêmio por livro completo (R$): <input type="number" step="0.5" id="cfgBook" value="${S.settings.bookReward}"></label>
     <label>Bônus máximo das gemas no mês (R$): <input type="number" step="0.5" id="cfgGems" value="${S.settings.gemsBonusMax}"></label>
     <label>Valor do desafio surpresa (R$): <input type="number" step="0.5" id="cfgChallenge" value="${S.settings.challengeValue}"></label>
-    <label>Sincronização entre celulares — URL do Firebase (opcional): <input type="text" id="cfgSync" value="${(S.settings.syncUrl || '').replace(/"/g, '&quot;')}" placeholder="https://seu-projeto.firebaseio.com/familia-XYZ">
-    <small class="muted">Todos os celulares com a mesma URL compartilham os dados. Veja o passo a passo no README do projeto. ${S.settings.syncUrl ? (cloudStatus === 'ok' ? '☁️ Conectado' : cloudStatus === 'err' ? '⚠️ Erro de conexão' : '☁️ Aguardando...') : ''}</small></label>
+    <label>Sincronização entre celulares — URL do Firebase: <input type="text" id="cfgSync" value="${(S.settings.syncUrl || '').replace(/"/g, '&quot;')}" placeholder="https://seu-projeto.firebaseio.com/familia-XYZ">
+    <small class="muted">Já vem configurada de fábrica — todos os celulares com a mesma URL compartilham os dados automaticamente, mesmo que o navegador de algum deles limpe os dados sozinho. ${S.settings.syncUrl ? (cloudStatus === 'ok' ? '☁️ Conectado' : cloudStatus === 'err' ? '⚠️ Erro de conexão — confira a URL' : '☁️ Conectando...') : '⚠️ Sem sincronização configurada'}</small></label>
     <label>Texto do prêmio final: <input type="text" id="cfgPrize" value="${S.settings.prizeText.replace(/"/g, '&quot;')}"></label>
     <label>Novo PIN: <input type="text" id="cfgPin" placeholder="deixe vazio p/ manter"></label>
     <button class="btn btn-big" id="cfgSave">💾 Salvar configurações</button>
@@ -1363,6 +1376,7 @@ function renderParent() {
 // ---------- Init ----------
 document.addEventListener('DOMContentLoaded', () => {
   processPastDays();
+  save(); // garante que qualquer migração feita ao carregar já fica gravada, mesmo sem nenhuma ação do usuário
   document.querySelectorAll('[data-icon]').forEach(s => { s.innerHTML = ICONS[s.dataset.icon] || ''; });
   document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => { currentTab = b.dataset.tab; parentMode = false; render(); });
   render();
