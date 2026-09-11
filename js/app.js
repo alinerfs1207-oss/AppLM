@@ -152,7 +152,7 @@ function cloudUrl() {
 function scheduleCloudPush() {
   if (!cloudUrl()) return;
   clearTimeout(cloudPushTimer);
-  cloudPushTimer = setTimeout(cloudPush, 1500);
+  cloudPushTimer = setTimeout(cloudPush, 400);
 }
 async function cloudPush() {
   const u = cloudUrl();
@@ -162,6 +162,17 @@ async function cloudPush() {
     cloudStatus = r.ok ? 'ok' : 'err';
   } catch (e) { cloudStatus = 'err'; }
 }
+// Envia para a nuvem imediatamente, sem esperar o atraso normal — usado quando o
+// app está prestes a fechar, para não perder o que ele acabou de ganhar. `keepalive`
+// pede ao navegador para terminar o envio mesmo depois da página começar a fechar.
+function flushCloudPushNow() {
+  clearTimeout(cloudPushTimer);
+  const u = cloudUrl();
+  if (!u) return;
+  try { fetch(u, { method: 'PUT', body: JSON.stringify(S), keepalive: true }).catch(() => {}); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushCloudPushNow(); });
+window.addEventListener('pagehide', flushCloudPushNow);
 async function cloudPull() {
   const u = cloudUrl();
   if (!u) return;
@@ -1443,12 +1454,16 @@ function renderParent() {
 // ---------- Init ----------
 document.addEventListener('DOMContentLoaded', () => {
   processPastDays();
-  save(); // garante que qualquer migração feita ao carregar já fica gravada, mesmo sem nenhuma ação do usuário
   document.querySelectorAll('[data-icon]').forEach(s => { s.innerHTML = ICONS[s.dataset.icon] || ''; });
   document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => { currentTab = b.dataset.tab; parentMode = false; render(); });
   render();
-  // sincronização em nuvem (se configurada): puxa agora e a cada 60s
-  cloudPull();
+  // sincronização em nuvem (se configurada): busca o mais recente ANTES de gravar —
+  // se gravássemos primeiro, um celular desatualizado poderia sobrescrever o
+  // progresso mais novo de outro celular antes de baixá-lo
+  cloudPull().finally(() => {
+    save(); // garante que qualquer migração feita ao carregar já fica gravada, mesmo sem nenhuma ação do usuário
+    render();
+  });
   setInterval(cloudPull, 60000);
   // vira o dia sozinho: se o relógio do celular passar da meia-noite com o
   // app aberto, recalcula tarefas/streak/lembretes sem precisar recarregar
