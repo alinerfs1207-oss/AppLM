@@ -48,8 +48,22 @@ function defaultState() {
   };
 }
 
+// Preenche recursivamente qualquer campo ausente com o valor padrão correspondente.
+// Necessário porque o Firebase apaga silenciosamente objetos/listas vazios ({} ou [])
+// ao salvar — sem isso, um campo como settings.taskValues ou reading.sessions pode
+// "sumir" depois de passar pela nuvem e quebrar a tela na próxima leitura.
+function deepDefaults(obj, def) {
+  if (Array.isArray(def)) return Array.isArray(obj) ? obj : def;
+  if (def !== null && typeof def === 'object') {
+    const out = (obj !== null && typeof obj === 'object' && !Array.isArray(obj)) ? { ...obj } : {};
+    for (const k of Object.keys(def)) out[k] = deepDefaults(obj ? obj[k] : undefined, def[k]);
+    return out;
+  }
+  return obj === undefined ? def : obj;
+}
+
 function normalizeState(st) {
-  st = Object.assign(defaultState(), st);
+  st = deepDefaults(st, defaultState());
   // migração: avatares antigos salvos como emoji → ids de ícone
   const emap = { '🦁': 'lion', '🐺': 'wolf', '🦅': 'eagle', '🐯': 'tiger', '🐉': 'dragon', '👑': 'crown' };
   if (emap[st.avatar]) st.avatar = emap[st.avatar];
@@ -77,16 +91,6 @@ function normalizeState(st) {
     st.days = {};
     st.v = 2;
   }
-  // migração: campos novos em estados antigos
-  if (!st.reading.book) st.reading.book = { title: '', page: 0 };
-  if (!st.reading.history) st.reading.history = [];
-  if (!st.months) st.months = [];
-  if (!st.eiFocus) st.eiFocus = [];
-  if (!st.challenges) st.challenges = {};
-  if (!st.contracts) st.contracts = {};
-  if (!st.streakBonusDays) st.streakBonusDays = [];
-  if (st.settings.gemsBonusMax == null) st.settings.gemsBonusMax = 4.0;
-  if (st.settings.challengeValue == null) st.settings.challengeValue = 1.0;
   if (!st.settings.syncUrl) st.settings.syncUrl = DEFAULT_SYNC_URL;
   return st;
 }
@@ -233,7 +237,12 @@ function monthName(dstr) {
 
 function dayRec(dstr) {
   if (!S.days[dstr]) S.days[dstr] = { checkin: false, tasks: {}, quiz: null, ei: null };
-  return S.days[dstr];
+  // autocura: a sincronização em nuvem pode remover campos vazios (objetos {} somem),
+  // então garante que a forma do registro sempre existe antes de qualquer leitura
+  const r = S.days[dstr];
+  if (!r.tasks) r.tasks = {};
+  if (r.checkin === undefined) r.checkin = false;
+  return r;
 }
 
 // ---------- Fechamento de dias passados (rollover) ----------
@@ -1238,6 +1247,7 @@ function renderParent() {
   let hasPend = false;
   // diárias
   Object.entries(S.days).forEach(([dstr, rec]) => {
+    if (!rec.tasks) rec.tasks = {};
     DAILY_TASKS.forEach(t => {
       if (rec.tasks[t.id] === 'pending') {
         hasPend = true;
