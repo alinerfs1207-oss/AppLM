@@ -87,21 +87,51 @@ function normalizeState(st) {
   if (!st.streakBonusDays) st.streakBonusDays = [];
   if (st.settings.gemsBonusMax == null) st.settings.gemsBonusMax = 4.0;
   if (st.settings.challengeValue == null) st.settings.challengeValue = 1.0;
-  if (st.settings.syncUrl == null) st.settings.syncUrl = '';
+  if (!st.settings.syncUrl) st.settings.syncUrl = DEFAULT_SYNC_URL;
   return st;
+}
+
+// ---------- Diagnóstico de gravação (visível na tela, para investigar problemas de salvamento) ----------
+const diag = { storageOk: null, storageError: null, loadOk: null, loadError: null, loadedUpdatedAt: 0, lastSaveOk: null, lastSaveAt: null, saveError: null };
+function storageProbe() {
+  try {
+    const k = '__applm_probe__';
+    localStorage.setItem(k, '1');
+    const ok = localStorage.getItem(k) === '1';
+    localStorage.removeItem(k);
+    return ok;
+  } catch (e) { diag.storageError = (e && e.message) || String(e); return false; }
 }
 
 let S = load();
 function load() {
+  diag.storageOk = storageProbe();
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return normalizeState(JSON.parse(raw));
-  } catch (e) { /* estado novo */ }
+    if (raw) {
+      const parsed = normalizeState(JSON.parse(raw));
+      diag.loadOk = true;
+      diag.loadedUpdatedAt = parsed.updatedAt || 0;
+      return parsed;
+    }
+    diag.loadOk = true; // sem dado salvo ainda (primeira vez neste celular)
+  } catch (e) {
+    diag.loadOk = false;
+    diag.loadError = (e && e.message) || String(e);
+  }
   return defaultState();
 }
 function save() {
   S.updatedAt = Date.now();
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+  try {
+    const json = JSON.stringify(S);
+    localStorage.setItem(STORE_KEY, json);
+    if (localStorage.getItem(STORE_KEY) !== json) throw new Error('Leitura após gravação não confere — o navegador pode estar bloqueando ou limitando o armazenamento.');
+    diag.lastSaveOk = true; diag.lastSaveAt = Date.now(); diag.saveError = null;
+  } catch (e) {
+    diag.lastSaveOk = false;
+    diag.saveError = (e && e.message) || String(e);
+  }
   scheduleCloudPush();
 }
 
@@ -1158,8 +1188,35 @@ function doPayment(payout) {
   render();
 }
 
+function fmtTime(ms) {
+  if (!ms) return 'nunca';
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} de ${fmtBR(dateToStr(d))}`;
+}
+
+function diagnosticCard() {
+  const problems = [];
+  if (diag.storageOk === false) problems.push(`Armazenamento do celular bloqueado: "${diag.storageError || 'motivo desconhecido'}"`);
+  if (diag.loadOk === false) problems.push(`Falha ao ler dados salvos: "${diag.loadError || 'motivo desconhecido'}"`);
+  if (diag.lastSaveOk === false) problems.push(`Falha ao gravar: "${diag.saveError || 'motivo desconhecido'}"`);
+  const cloudLine = S.settings.syncUrl
+    ? (cloudStatus === 'ok' ? '☁️ Nuvem: conectado' : cloudStatus === 'err' ? '⚠️ Nuvem: erro de conexão (confira a URL ou a internet do celular)' : '☁️ Nuvem: conectando...')
+    : '⚠️ Nuvem: sem sincronização configurada';
+  const ok = problems.length === 0;
+  const c = el(`<div class="card" style="border:2px solid ${ok ? '#86efac' : '#fca5a5'};background:${ok ? '#f0fdf4' : '#fef2f2'}">
+    <h3>🔍 Diagnóstico de gravação</h3>
+    <p>${ok ? '✅ Armazenamento do celular: funcionando' : '❌ ' + problems.join('<br>❌ ')}</p>
+    <p>🕐 Progresso salvo carregado ao abrir: <b>${fmtTime(diag.loadedUpdatedAt)}</b></p>
+    <p>💾 Último salvamento confirmado nesta sessão: <b>${fmtTime(diag.lastSaveAt)}</b></p>
+    <p>${cloudLine}</p>
+    <p class="muted">Se "salvo carregado ao abrir" não bater com a última vez que ele usou o app, os dados não estão sobrevivendo no celular. Tire um print desta tela.</p>
+  </div>`);
+  return c;
+}
+
 function renderParent() {
   const wrap = el('<div class="screen"></div>');
+  wrap.appendChild(diagnosticCard());
   const bal = balance();
   const gb = gemsBonus();
   const payout = Math.max(0, Math.min(S.settings.limit, bal + gb));
