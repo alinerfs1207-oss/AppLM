@@ -1415,7 +1415,10 @@ function renderParent() {
       <button class="btn btn-sm" id="expBtn">⬇️ Exportar backup</button>
       <button class="btn btn-sm" id="impBtn">⬆️ Importar backup</button>
     </div>
-    <p class="muted">⚠️ Os dados ficam salvos neste celular/navegador. Exporte um backup de vez em quando!</p></div>`);
+    <p class="muted">⚠️ Os dados ficam salvos neste celular/navegador. Exporte um backup de vez em quando!</p>
+    <hr>
+    <button class="btn btn-big no-btn" id="resetBtn">🗑️ Reiniciar tudo (apagar todo o progresso)</button>
+    <p class="muted">Zera saldo, gemas, tarefas, aprendizado de gramática, leituras e histórico em <b>todos os celulares sincronizados</b> — o ciclo recomeça hoje. Use só se quiser um recomeço completo de verdade.</p></div>`);
   cfg.querySelector('#cfgSave').onclick = () => {
     S.settings.limit = parseFloat(cfg.querySelector('#cfgLimit').value) || 100;
     S.settings.quizReward = parseFloat(cfg.querySelector('#cfgQuiz').value) || 0;
@@ -1444,6 +1447,28 @@ function renderParent() {
       m.querySelector('#impOk').onclick = () => {
         try { S = Object.assign(defaultState(), JSON.parse(m.querySelector('#impTxt').value)); save(); m.remove(); render(); toast('Backup importado!', 'ok'); }
         catch (e) { toast('Arquivo inválido.', 'bad'); }
+      };
+    });
+  };
+  cfg.querySelector('#resetBtn').onclick = () => {
+    modal(`<h3>🗑️ Reiniciar tudo?</h3>
+      <p>Isso apaga <b>todo</b> o progresso — saldo, gemas, tarefas, aprendizado de gramática, leituras, histórico de meses — em <b>todos os celulares sincronizados</b>. O ciclo recomeça hoje, do zero.</p>
+      <p class="muted">Não afeta o PIN nem o endereço de sincronização.</p>
+      <button class="btn btn-big no-btn" id="resetOk">🗑️ Sim, apagar tudo e recomeçar</button>
+      <button class="btn btn-big btn-ghost" id="resetNo">Cancelar</button>`, m => {
+      m.querySelector('#resetNo').onclick = () => m.remove();
+      m.querySelector('#resetOk').onclick = () => {
+        const keepPin = S.pin, keepSync = S.settings.syncUrl;
+        const t = todayStr();
+        S = defaultState();
+        S.pin = keepPin;
+        S.settings.syncUrl = keepSync;
+        S.cycle = { start: t, end: addDays(t, 30), payday: addDays(t, 31) };
+        save();
+        m.remove();
+        parentMode = false; currentTab = 'home';
+        render();
+        toast('Tudo reiniciado! Novo ciclo começa hoje 🚀', 'ok');
       };
     });
   };
