@@ -1454,12 +1454,16 @@ function renderParent() {
 // ---------- Init ----------
 document.addEventListener('DOMContentLoaded', () => {
   processPastDays();
-  save(); // garante que qualquer migração feita ao carregar já fica gravada, mesmo sem nenhuma ação do usuário
   document.querySelectorAll('[data-icon]').forEach(s => { s.innerHTML = ICONS[s.dataset.icon] || ''; });
   document.querySelectorAll('.nav-btn').forEach(b => b.onclick = () => { currentTab = b.dataset.tab; parentMode = false; render(); });
   render();
-  // sincronização em nuvem (se configurada): puxa agora e a cada 60s
-  cloudPull();
+  // sincronização em nuvem (se configurada): busca o mais recente ANTES de gravar —
+  // se gravássemos primeiro, um celular desatualizado poderia sobrescrever o
+  // progresso mais novo de outro celular antes de baixá-lo
+  cloudPull().finally(() => {
+    save(); // garante que qualquer migração feita ao carregar já fica gravada, mesmo sem nenhuma ação do usuário
+    render();
+  });
   setInterval(cloudPull, 60000);
   // vira o dia sozinho: se o relógio do celular passar da meia-noite com o
   // app aberto, recalcula tarefas/streak/lembretes sem precisar recarregar
